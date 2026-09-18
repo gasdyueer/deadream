@@ -135,6 +135,7 @@ scripts/
   import-posts.mjs            把指定笔记搬进某个分类
   shrink-images.mjs           重压过大的动图
   lib/import-note.mjs         导入共用：命名、附件查找、图片转码、语法转换
+  lib/git-push.mjs            push 网络失败后走代理重试一次
   track.mjs                   内容状态总览（按分类）
   ship.mjs                    提交并推送
   changelog.mjs               CI 用的内容变更追踪
@@ -144,6 +145,8 @@ scripts/
 ## 发布链路
 
 `pnpm ship` → push 到 `main` → Actions 构建 → 部署 Pages。
+
+`git push` 遇到**网络类**失败（`SSL_ERROR_SYSCALL`、`RPC failed`、`Connection reset` 之类）会自动用本机代理再试一次：依次看环境变量 `HTTPS_PROXY`、Windows 系统代理、`127.0.0.1:7890`（都先探测端口通不通），重试时顺手把 `http.version` 降到 HTTP/1.1 —— 大 pack 在 HTTP/2 下更容易 `RPC failed`；再失败就把能直接复制的命令打出来，退出码仍是 1。认证失败、非快进这类业务失败不重试，重试也不会变好。实现见 `scripts/lib/git-push.mjs`。
 
 每次运行会把「本次推送新增/更新/删除/发布/转为草稿的内容」写进 Actions 运行摘要，同时打在步骤日志里（表格含「分类」列，区分文章与日记）：
 

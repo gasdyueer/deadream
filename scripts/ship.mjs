@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { COLLECTIONS, parsePost } from '../docs/.vitepress/lib/posts.mjs'
+import { pushHint, pushWithRetry } from './lib/git-push.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -36,19 +37,31 @@ for (let index = 0; index < argv.length; index++) {
   }
 }
 
-function git(args, { optional = false } = {}) {
+/** 跑一条 git；不抛错也不退出，把成败与输出交回调用方 */
+function runGit(args) {
   try {
-    // core.quotepath=false：否则非 ASCII 路径会被转义成 "..."，Linux/CI 上默认开启
-    return execFileSync('git', ['-c', 'core.quotepath=false', ...args], {
-      encoding: 'utf8',
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+    return {
+      ok: true,
+      stdout: execFileSync('git', ['-c', 'core.quotepath=false', ...args], {
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }),
+      output: '',
+    }
   } catch (error) {
-    if (optional) return ''
-    console.error(`git ${args.join(' ')} 失败：${String(error.stderr ?? error.message).trim()}`)
-    process.exit(1)
+    // 优先 stderr（git 的诊断都在这），退而求其次 stdout、最后才是 execFileSync 的 "Command failed" 文案
+    const detail = String(error.stderr ?? '').trim() || String(error.stdout ?? '').trim() || String(error.message ?? '').trim()
+    return { ok: false, stdout: '', output: detail }
   }
+}
+
+function git(args, { optional = false } = {}) {
+  const result = runGit(args)
+  if (result.ok) return result.stdout
+  if (optional) return ''
+  console.error(`git ${args.join(' ')} 失败：${result.output}`)
+  process.exit(1)
 }
 
 if (git(['rev-parse', '--is-inside-work-tree'], { optional: true }).trim() !== 'true') {
@@ -150,8 +163,16 @@ if (!options.push) {
   process.exit(0)
 }
 
-git(upstream ? ['push'] : ['push', '-u', 'origin', branch])
-console.log('已推送。')
+// push 失败先自己救一次：网络被掐时用本机代理重试，见 lib/git-push.mjs
+const pushArgs = upstream ? ['push'] : ['push', '-u', 'origin', branch]
+const pushed = await pushWithRetry({ run: (extra) => runGit([...extra, ...pushArgs]) })
+if (!pushed.ok) {
+  console.error(`\ngit ${pushArgs.join(' ')} 失败：${pushed.output}`)
+  const hint = pushHint(pushed)
+  if (hint) console.error(`\n${hint}`)
+  process.exit(1)
+}
+console.log(pushed.proxy ? `已推送（网络失败后经 ${pushed.proxy} 重试成功）。` : '已推送。')
 
 if (branch !== 'main') {
   console.log(`\n注意：当前分支不是 main，.github/workflows/deploy.yml 只监听 main，这次推送不会触发部署。`)
