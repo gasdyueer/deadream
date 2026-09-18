@@ -43,11 +43,12 @@ scripts/
 
 `pnpm ship` → push 到 `main` → Actions 构建 → 部署 Pages。
 
-每次运行会把「本次推送新增/更新/删除/发布/转为草稿的文章」写进 Actions 运行摘要：
+每次运行会把「本次推送新增/更新/删除/发布/转为草稿的文章」写进 Actions 运行摘要，同时打在步骤日志里：
 
 ```bash
 gh run list --limit 5
-gh run view <run-id>          # 摘要里就是文章变更表
+gh run view <run-id>                        # 摘要里就是文章变更表
+gh run view <run-id> --log | grep -A20 '文章追踪'
 ```
 
 站点同时输出两份机器可读文件：

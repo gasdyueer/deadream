@@ -169,7 +169,8 @@ const headShort = git(['rev-parse', '--short', head], true) || head
 const range = base ? `${base.slice(0, 7)}...${headShort}` : `全部（${headShort}）`
 const markdown = [`## 📚 文章追踪`, '', `> 区间 \`${range}\``, '', renderChanges(), renderOthers(), renderManifest()].join('\n')
 
+// 摘要文件给 GitHub UI 看，stdout 给 `gh run view --log` 看（CI 里两者都要）
 if (options.out) appendFileSync(options.out, `${markdown}\n`, 'utf8')
-else process.stdout.write(`${markdown}\n`)
+process.stdout.write(`${markdown}\n`)
 
 console.log(`[changelog] 区间 ${range}：${changes.length} 处文章变更${options.out ? `，已写入 ${options.out}` : ''}`)

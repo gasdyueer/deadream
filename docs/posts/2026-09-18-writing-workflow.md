@@ -80,7 +80,7 @@ pnpm ship
 
 所以「我这次到底发了什么」有两个地方可以看：
 
-- **Actions 运行摘要**：`gh run list` 找到那次运行，`gh run view <id>` 看文章变更表。
+- **Actions 运行摘要**：`gh run list` 找到那次运行，`gh run view <id>` 看文章变更表；同一张表也打在步骤日志里，`gh run view <id> --log | grep -A20 '文章追踪'`。
 - **站点上的 `posts.json`**：所有已发布文章的清单（标题、日期、标签、字数、正文哈希），可以直接 diff 出「哪篇文章的正文变了」。
 
 ```bash
