@@ -86,7 +86,31 @@ node scripts/import-posts.mjs --collection video --attachments "D:/Note/另一�
 
 `--dry-run` 可以只看结果不写盘。
 
+手工丢进 `docs/public/images/<分类>/` 的图片不过这条管线，尤其是截屏动图，单张能到 8MB。这类图用 `pnpm shrink:images` 就地重压：
+
+```bash
+pnpm shrink:images --dry-run     # 只看能省多少
+pnpm shrink:images               # 就地替换，文件名与格式不变
+```
+
+只碰 ≥512KB 的**动图**（帧数与循环次数原样保留），而且重压后必须小 10% 以上才替换，所以同一套参数重复运行不会把已经压过的图反复压。2026-09 那次：≥512KB 的动图 27 个，18 个达标，34.85MB → 30.53MB（最大的 8.32MB → 7.06MB）。静图不动 —— 它们是导入管线的产物（最长边 1920 / q82），再压没有收益。
+
 订阅源（`feed.rss`）与 `posts.json` 只收「文章」分类 —— 500+ 条日记会把新内容淹掉。想改这个行为，改 `docs/.vitepress/config.mts` 里 `buildEnd` 的 `collections` 参数。
+
+## 构建
+
+本地 `pnpm build` 常年要 5 分钟以上、而且根本跑不完，原因都出在 VitePress 的「每个页面 spawn 一次 `git`」上。本机 git 进程启动约 1 秒（`git --version` 连跑 20 次要 19 秒 —— 杀软实时扫描那类问题），557 个页面就直接放大成分钟级；CI 上 git 快得多，所以这是本地特有的坑。
+
+| 环节 | VitePress 默认 | 现在 |
+| --- | --- | --- |
+| 页脚「最后更新」 | 每页一次 `git log -1 --pretty="%ai" <文件>`（`getGitTimestamp`） | 一条 `git log --name-only` 扫全库拿「文件 → 最后提交时间」，再由 Vite 插件把 `lastUpdated: <ISO>` 注入 md 的 frontmatter（`lib/last-updated.mjs`）。VitePress 见 frontmatter 里是 Date 就直接用、不再 spawn |
+| `sitemap.xml` | 每页再一次（`getLastmod`），而且只读**磁盘上**的 frontmatter，构造期注入的那份它看不见 | 不用 VitePress 的 sitemap，在 `buildEnd` 里用同一份扫描结果自己渲染（`lib/sitemap.mjs`），URL 规则与 lastmod 口径保持一致 |
+
+取值不变：改造前后逐页比对 561 个页面，557 个页脚时间完全一致，另外 4 个（首页、404、两篇未提交的新文章）两边都不显示。本地全量构建 5 分 36 秒（还没跑完，卡在 sitemap 的 git 循环里）→ **13.75 秒**。
+
+页面自己写了 frontmatter `lastUpdated` 的，插件不覆盖；写 `lastUpdated: false` 就是不显示。
+
+图片默认加 `loading="lazy"`（`markdown.image.lazyLoading`）：做片笔记那种一页 50+ 张动图的笔记，不加会首屏就把几十 MB 拉下来 —— 实测加上之后首屏只取 18/55 张。
 
 ## 目录
 
@@ -97,16 +121,19 @@ docs/
   video/                      做片笔记
   public/images/<分类>/       各分类的图片（JPEG，由导入脚本生成）
   .vitepress/
-    config.mts                站点配置；buildEnd 生成 feed.rss 与 posts.json
+    config.mts                站点配置；buildEnd 生成 feed.rss / posts.json / sitemap.xml
     lib/posts.mjs             扫描 + 解析内容、分类声明（唯一实现，脚本与站点共用）
     lib/posts.d.mts           上述模块的类型契约
     lib/feed.mjs              RSS 与已发布清单渲染
+    lib/last-updated.mjs      一次 git 扫描 + 构建期注入 frontmatter.lastUpdated
+    lib/sitemap.mjs           sitemap.xml 渲染
     theme/collections.data.ts 按分类加载内容，供列表与信息条使用
     theme/                    自定义主题：内容列表、标签页、内容头部信息条
 scripts/
   new-post.mjs                新建文章
   import-diary.mjs            导入 Obsidian 日记库
   import-posts.mjs            把指定笔记搬进某个分类
+  shrink-images.mjs           重压过大的动图
   lib/import-note.mjs         导入共用：命名、附件查找、图片转码、语法转换
   track.mjs                   内容状态总览（按分类）
   ship.mjs                    提交并推送

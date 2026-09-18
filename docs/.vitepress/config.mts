@@ -3,14 +3,14 @@ import path from 'node:path'
 import { defineConfig } from 'vitepress'
 import taskLists from 'markdown-it-task-lists'
 import { renderFeed, renderManifest } from './lib/feed.mjs'
-import { COLLECTIONS, draftFiles, loadPosts } from './lib/posts.mjs'
+import { lastUpdatedPlugin, collectGitDates } from './lib/last-updated.mjs'
+import { COLLECTIONS, DOCS_DIR, draftFiles, loadPosts } from './lib/posts.mjs'
+import { renderSitemap } from './lib/sitemap.mjs'
 
 /** 站点根地址（含 base，无尾斜杠），CI 通过 SITE_URL 注入 */
 const siteUrl = (process.env.SITE_URL || 'https://gasdyueer.github.io/deadream').replace(/\/+$/, '')
 /** 部署路径，GitHub Pages 项目站点为 /<repo>/，本地为 / */
 const base = process.env.BASE_PATH || '/'
-/** base 去斜杠后的形式，用于手工拼接绝对 URL */
-const basePath = base.replace(/^\/|\/$/g, '')
 const siteTitle = 'deadream'
 const siteDescription = '一个用来存放想法、代码与笔记的地方。'
 const repoUrl = 'https://github.com/gasdyueer/deadream'
@@ -56,18 +56,15 @@ export default defineConfig({
   lastUpdated: true,
   srcExclude: drafts,
   vite: {
+    // 页脚「最后更新」的取数：一次 git 扫描代替「每页 spawn 一次 git log」，原因见该文件注释
+    plugins: [lastUpdatedPlugin(DOCS_DIR)],
     build: {
       // 搜索索引 chunk 有 ~2MB（含全部日记，中文二元分词的代价），vite 默认 500kB 的提醒对它没意义：
       // 这个 chunk 只在打开搜索框时才动态 import，不进首屏
       chunkSizeWarningLimit: 3000,
     },
   },
-  sitemap: {
-    // hostname 只到源站；VitePress 用 new URL(page, hostname) 拼接，base 会被吃掉，所以靠 transformItems 补回来
-    hostname: new URL(siteUrl).origin,
-    transformItems: (items) =>
-      items.map((item) => ({ ...item, url: `/${[basePath, item.url.replace(/^\//, '')].filter(Boolean).join('/')}` })),
-  },
+  // sitemap 由 buildEnd 自己写（见 lib/sitemap.mjs）：VitePress 自带的那份会给每个页面 spawn 一次 git
   head: [
     ['link', { rel: 'alternate', type: 'application/rss+xml', title: `${siteTitle} RSS`, href: `${siteUrl}/feed.rss` }],
     ['meta', { name: 'theme-color', content: '#3451b2' }],
@@ -75,6 +72,8 @@ export default defineConfig({
   ],
   markdown: {
     lineNumbers: false,
+    // 长文里常贴十几张截图（拉片笔记里还有动图），默认会把它们一起下载；交给 VitePress 加 loading="lazy"
+    image: { lazyLoading: true },
     config(md) {
       // 日记里的习惯清单是 GFM 任务列表语法，VitePress 默认不渲染成复选框
       md.use(taskLists, { enabled: false, label: true })
@@ -139,8 +138,13 @@ export default defineConfig({
     mkdirSync(siteConfig.outDir, { recursive: true })
     writeFileSync(path.join(siteConfig.outDir, 'feed.rss'), renderFeed(posts, { siteUrl, title: siteTitle, description: siteDescription }))
     writeFileSync(path.join(siteConfig.outDir, 'posts.json'), renderManifest(posts, { siteUrl, title: siteTitle }))
+    // sitemap 也在这里写：交给 VitePress 的话它会为每个页面 spawn 一次 git 取 lastmod
+    writeFileSync(
+      path.join(siteConfig.outDir, 'sitemap.xml'),
+      renderSitemap(siteConfig.pages, { siteUrl, cleanUrls: siteConfig.cleanUrls, lastUpdated: collectGitDates(DOCS_DIR) })
+    )
     console.log(
-      `[deadream] ${posts.length} 篇文章 → feed.rss, posts.json；${loadPosts({ collections: ['diary'] }).length} 篇日记${drafts.length ? `；${drafts.length} 篇草稿未构建` : ''}`
+      `[deadream] ${posts.length} 篇文章 → feed.rss, posts.json；${siteConfig.pages.length} 个页面 → sitemap.xml；${loadPosts({ collections: ['diary'] }).length} 篇日记${drafts.length ? `；${drafts.length} 篇草稿未构建` : ''}`
     )
   },
 })
