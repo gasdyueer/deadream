@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from 'vitepress'
+import taskLists from 'markdown-it-task-lists'
 import { renderFeed, renderManifest } from './lib/feed.mjs'
 import { draftFiles, loadPosts } from './lib/posts.mjs'
 
@@ -37,10 +38,15 @@ export default defineConfig({
   ],
   markdown: {
     lineNumbers: false,
+    config(md) {
+      // 日记里的习惯清单是 GFM 任务列表语法，VitePress 默认不渲染成复选框
+      md.use(taskLists, { enabled: false, label: true })
+    },
   },
   themeConfig: {
     nav: [
       { text: '文章', link: '/posts/' },
+      { text: '日记', link: '/diary/' },
       { text: '归档', link: '/archive' },
       { text: '标签', link: '/tags' },
       { text: 'RSS', link: '/feed.rss' },
@@ -56,16 +62,19 @@ export default defineConfig({
     returnToTopLabel: '回到顶部',
     externalLinkIcon: true,
     footer: {
-      message: `共 ${loadPosts().length} 篇文章 · 基于 VitePress 构建`,
+      message: `共 ${loadPosts({ collections: ['post'] }).length} 篇文章 · ${loadPosts({ collections: ['diary'] }).length} 篇日记 · 基于 VitePress 构建`,
       copyright: '© 2026 deadream',
     },
     socialLinks: [{ icon: 'github', link: repoUrl }],
   },
   buildEnd(siteConfig) {
-    const posts = loadPosts()
+    // 订阅源与清单只收「文章」分类：日记有 500+ 条，塞进 RSS 会淹掉真正的新内容
+    const posts = loadPosts({ collections: ['post'] })
     mkdirSync(siteConfig.outDir, { recursive: true })
     writeFileSync(path.join(siteConfig.outDir, 'feed.rss'), renderFeed(posts, { siteUrl, title: siteTitle, description: siteDescription }))
     writeFileSync(path.join(siteConfig.outDir, 'posts.json'), renderManifest(posts, { siteUrl, title: siteTitle }))
-    console.log(`[deadream] ${posts.length} 篇已发布文章 → feed.rss, posts.json${drafts.length ? `（${drafts.length} 篇草稿未构建）` : ''}`)
+    console.log(
+      `[deadream] ${posts.length} 篇文章 → feed.rss, posts.json；${loadPosts({ collections: ['diary'] }).length} 篇日记${drafts.length ? `；${drafts.length} 篇草稿未构建` : ''}`
+    )
   },
 })

@@ -14,28 +14,51 @@ pnpm dev            # http://localhost:5173
 ```bash
 pnpm new "文章标题" --tags 工具,博客   # 生成 docs/posts/YYYY-MM-DD-slug.md
 pnpm dev                              # 边写边看
-pnpm track                            # 所有文章状态：已发布 / 草稿 / 未提交
+pnpm track                            # 内容状态：文章 / 日记 / 草稿 / 未提交
 pnpm ship                             # 提交并推送，自动生成 commit message
 ```
 
 文章是 `docs/posts/` 下的 Markdown，frontmatter 见 `docs/posts/2026-09-18-writing-workflow.md`。
+
+## 日记
+
+`docs/diary/` 是一个独立分类，来自 Obsidian 日记库的导入：
+
+```bash
+pnpm import:diary                                                    # 用默认源目录
+node scripts/import-diary.mjs --source "D:/Note/social death"         # 或指定库目录
+```
+
+脚本做四件事，源文件只读不删：
+
+1. 从文件名解析日期时间（`2026年3月30日星期一晚上6点41分.md` → `2026-03-30` 18:41 / `2024-05-21.md`）；
+2. 转换 Obsidian 语法：`![[图.png|alt]]` → `![alt](/images/diary/x.jpg)`，`[[笔记|显示]]` → 纯文本，库内死链只留文字；
+3. 把**被引用到的**图片压成 JPEG（最长边 1920、q82，白底）写到 `docs/public/images/diary/`，原始 840MB → 约 60MB；
+4. 写出 `docs/diary/<slug>.md`（frontmatter 含 title/date/tags）。
+
+视频与 `.canvas`/`.html` 附件不入库，正文里留一行「未收录」标注。重复执行是幂等的：已转换且比源文件新的图片会跳过，`--force` 强制重转。
+
+日记只参与站内浏览（`/diary/`），不进 RSS 与 `posts.json` —— 500+ 条会把新内容淹掉。想改这个行为，改 `docs/.vitepress/config.mts` 里 `buildEnd` 的 `collections` 参数。
 
 ## 目录
 
 ```
 docs/
   posts/                      文章（index.md 是列表页，不是文章）
+  diary/                      日记（独立分类，来自 Obsidian 导入）
+  public/images/diary/        日记图片（JPEG，由导入脚本生成）
   .vitepress/
     config.mts                站点配置；buildEnd 生成 feed.rss 与 posts.json
-    lib/posts.mjs             扫描 + 解析文章（唯一实现，脚本与站点共用）
+    lib/posts.mjs             扫描 + 解析内容（唯一实现，脚本与站点共用）
     lib/posts.d.mts           上述模块的类型契约
     lib/feed.mjs              RSS 与已发布清单渲染
-    theme/                    自定义主题：文章列表、标签页、文章头部信息条
+    theme/                    自定义主题：内容列表、标签页、内容头部信息条
 scripts/
   new-post.mjs                新建文章
-  track.mjs                   文章状态总览
+  import-diary.mjs            导入 Obsidian 日记并转码图片
+  track.mjs                   内容状态总览（文章 / 日记）
   ship.mjs                    提交并推送
-  changelog.mjs               CI 用的文章变更追踪
+  changelog.mjs               CI 用的内容变更追踪
 .github/workflows/deploy.yml  构建 → 追踪 → 部署 Pages
 ```
 
@@ -43,7 +66,7 @@ scripts/
 
 `pnpm ship` → push 到 `main` → Actions 构建 → 部署 Pages。
 
-每次运行会把「本次推送新增/更新/删除/发布/转为草稿的文章」写进 Actions 运行摘要，同时打在步骤日志里：
+每次运行会把「本次推送新增/更新/删除/发布/转为草稿的内容」写进 Actions 运行摘要，同时打在步骤日志里（表格含「分类」列，区分文章与日记）：
 
 ```bash
 gh run list --limit 5

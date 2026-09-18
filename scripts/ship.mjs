@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
+import path from 'node:path'
 import { parsePost } from '../docs/.vitepress/lib/posts.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
@@ -64,39 +66,62 @@ if (!staged.length) {
   process.exit(0)
 }
 
-const posts = staged
-  .filter((change) => change.path.startsWith('docs/posts/') && change.path.endsWith('.md'))
+/** 内容目录：文章与日记 */
+const CONTENT_DIRS = ['docs/posts/', 'docs/diary/']
+const COLLECTION_LABEL = { post: '文章', diary: '日记' }
+
+const content = staged
+  .filter((change) => CONTENT_DIRS.some((dir) => change.path.startsWith(dir)) && change.path.endsWith('.md'))
+  .filter((change) => path.basename(change.path) !== 'index.md')
   .map((change) => {
     const relative = change.path.replace(/^docs\//, '')
-    if (change.code === 'D') {
-      return { ...change, title: relative.replace(/^posts\//, '').replace(/\.md$/, '') }
-    }
-    return { ...change, title: parsePost(relative, git(['show', `:${change.path}`])).title }
+    const collection = relative.startsWith('diary/') ? 'diary' : 'post'
+    // 刚执行过 git add -A，工作区内容即暂存内容；删除的文件没有内容可读
+    if (change.code === 'D') return { ...change, collection, title: path.basename(relative, '.md') }
+    const abs = path.join(process.cwd(), change.path)
+    const raw = existsSync(abs) ? readFileSync(abs, 'utf8') : git(['show', `:${change.path}`])
+    return { ...change, collection, title: parsePost(relative, raw).title }
   })
 
-function joinTitles(titles) {
+function joinTitles(titles, collection) {
+  // 日记标题就是日期，堆多了没意义
+  if (collection === 'diary' && titles.length > 3) return `${titles.length} 篇`
   if (titles.length <= 2) return titles.map((title) => `《${title}》`).join('、')
   return `${titles.length} 篇（${titles.slice(0, 2).map((title) => `《${title}》`).join('、')}…）`
 }
 
 function buildMessage() {
-  const added = posts.filter((post) => post.code === 'A').map((post) => post.title)
-  const updated = posts.filter((post) => post.code === 'M' || post.code === 'R').map((post) => post.title)
-  const removed = posts.filter((post) => post.code === 'D').map((post) => post.title)
   const parts = []
-  if (added.length) parts.push(`新增${joinTitles(added)}`)
-  if (updated.length) parts.push(`更新${joinTitles(updated)}`)
-  if (removed.length) parts.push(`删除${joinTitles(removed)}`)
-  if (parts.length) return `post: ${parts.join('；')}`
-  return `chore: 更新站点（${staged.length} 个文件）`
+  const collections = new Set()
+  for (const collection of ['post', 'diary']) {
+    const pick = (codes) =>
+      content.filter((change) => change.collection === collection && codes.includes(change.code)).map((change) => change.title)
+    const segments = []
+    const added = pick(['A'])
+    const updated = pick(['M', 'R'])
+    const removed = pick(['D'])
+    if (added.length) segments.push(`新增${joinTitles(added, collection)}`)
+    if (updated.length) segments.push(`更新${joinTitles(updated, collection)}`)
+    if (removed.length) segments.push(`删除${joinTitles(removed, collection)}`)
+    if (!segments.length) continue
+    collections.add(collection)
+    parts.push(`${COLLECTION_LABEL[collection]}${segments.join('、')}`)
+  }
+  if (!parts.length) return `chore: 更新站点（${staged.length} 个文件）`
+  // scope: post / diary / content（两边都动了）
+  const scope = collections.size === 1 ? [...collections][0] : 'content'
+  return `${scope}: ${parts.join('；')}`
 }
 
 const message = options.message || buildMessage()
 const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']).trim()
 const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { optional: true }).trim()
 
-console.log(`待提交 ${staged.length} 个文件${posts.length ? `，其中文章 ${posts.length} 篇` : ''}：`)
-for (const post of posts) console.log(`  ${post.code}  ${post.title}  (${post.path})`)
+console.log(`待提交 ${staged.length} 个文件${content.length ? `，其中内容 ${content.length} 篇` : ''}：`)
+for (const item of content.slice(0, 10)) {
+  console.log(`  ${item.code}  ${COLLECTION_LABEL[item.collection]}  ${item.title}`)
+}
+if (content.length > 10) console.log(`  …另有 ${content.length - 10} 篇`)
 console.log(`\n提交信息：${message}`)
 console.log(`分支：${branch}${upstream ? ` → ${upstream}` : '（尚无上游）'}`)
 

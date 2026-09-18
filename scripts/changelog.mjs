@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { parsePost } from '../docs/.vitepress/lib/posts.mjs'
+import { loadPosts, parsePost } from '../docs/.vitepress/lib/posts.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -59,10 +59,13 @@ const head = options.head || 'HEAD'
 const base = options.base && !/^0+$/.test(options.base) ? options.base : git(['rev-parse', '--verify', '--quiet', `${head}^`], true)
 const site = options.site.replace(/\/+$/, '')
 
+/** 内容目录：文章与日记分开统计 */
+const CONTENT_DIRS = ['docs/posts', 'docs/diary']
+
 function collectRows() {
   const lines = base
-    ? git(['diff', '--name-status', '-M', base, head, '--', 'docs/posts'], true).split('\n')
-    : git(['ls-tree', '-r', '--name-only', head, '--', 'docs/posts'], true).split('\n')
+    ? git(['diff', '--name-status', '-M', base, head, '--', ...CONTENT_DIRS], true).split('\n')
+    : git(['ls-tree', '-r', '--name-only', head, '--', ...CONTENT_DIRS], true).split('\n')
 
   return lines
     .map((line) => line.trim())
@@ -88,6 +91,7 @@ const changes = collectRows().map((row) => {
   const relative = (target) => target.replace(/^docs\//, '')
   return {
     code: row.code,
+    collection: row.path.startsWith('docs/diary/') ? 'diary' : 'post',
     oldTitle: row.oldRaw ? parsePost(relative(row.oldPath), row.oldRaw) : null,
     newPost: row.newRaw ? parsePost(relative(row.path), row.newRaw) : null,
   }
@@ -107,7 +111,7 @@ function label(change) {
 const cell = (value) => String(value).replace(/\|/g, '\\|')
 
 function renderChanges() {
-  if (!changes.length) return '_本次推送没有文章变更。_\n'
+  if (!changes.length) return '_本次推送没有内容变更。_\n'
 
   const counts = new Map()
   const rows = changes.map((change) => {
@@ -115,24 +119,26 @@ function renderChanges() {
     counts.set(status, (counts.get(status) ?? 0) + 1)
     const post = change.newPost ?? change.oldTitle
     const link = site && post && change.code !== 'D' && !post.draft ? `[打开](${site}${post.url})` : '—'
-    return `| ${status} | ${cell(post?.title ?? '—')} | ${post?.date || '—'} | ${cell(post.tags.join(' ')) || '—'} | ${link} |`
+    const kind = change.collection === 'diary' ? '日记' : '文章'
+    return `| ${status} | ${kind} | ${cell(post?.title ?? '—')} | ${post?.date || '—'} | ${cell(post?.tags.join(' ')) || '—'} | ${link} |`
   })
 
   return [
     `**${[...counts].map(([status, count]) => `${status} ${count}`).join(' · ')}**`,
     '',
-    '| 状态 | 标题 | 日期 | 标签 | 链接 |',
-    '| --- | --- | --- | --- | --- |',
+    '| 状态 | 分类 | 标题 | 日期 | 标签 | 链接 |',
+    '| --- | --- | --- | --- | --- | --- |',
     ...rows,
     '',
   ].join('\n')
 }
 
 function renderOthers() {
-  const lines = base
-    ? git(['diff', '--name-only', base, head], true)
-    : git(['ls-tree', '-r', '--name-only', head], true)
-  const files = lines.split('\n').map((line) => line.trim()).filter((file) => file && !file.startsWith('docs/posts/'))
+  const lines = base ? git(['diff', '--name-only', base, head], true) : git(['ls-tree', '-r', '--name-only', head], true)
+  const files = lines
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((file) => file && !CONTENT_DIRS.some((dir) => file.startsWith(`${dir}/`)))
   if (!files.length) return ''
   const shown = files.slice(0, 15)
   return [
@@ -153,10 +159,13 @@ function renderOthers() {
 function renderManifest() {
   if (!options.manifest || !existsSync(options.manifest)) return ''
   const manifest = JSON.parse(readFileSync(options.manifest, 'utf8'))
+  const diaryCount = loadPosts({ collections: ['diary'] }).length
   const drafts = changes.filter((change) => change.newPost?.draft).length
   return [
     '',
-    `### 已发布清单（${manifest.count} 篇${drafts ? `，另有 ${drafts} 篇草稿未构建` : ''}）`,
+    `### 站点内容（文章 ${manifest.count} 篇 · 日记 ${diaryCount} 篇${drafts ? `，本次涉及 ${drafts} 篇草稿` : ''}）`,
+    '',
+    '订阅源与 posts.json 只收「文章」分类，日记不参与。',
     '',
     '| 日期 | 标题 | 标签 | 字数 |',
     '| --- | --- | --- | --- |',

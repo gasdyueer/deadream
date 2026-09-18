@@ -11,6 +11,15 @@ function git(args) {
   }
 }
 
+const argv = process.argv.slice(2)
+if (argv.includes('-h') || argv.includes('--help')) {
+  console.log(`用法：pnpm track [--all]
+
+默认列出所有「文章」和最近 5 条「日记」；--all 连 500+ 条日记一起列。`)
+  process.exit(0)
+}
+const showAll = argv.includes('--all')
+
 const WIDE_RE = /[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/
 
 /** 终端显示宽度（中日韩字符占两列）。 */
@@ -27,59 +36,91 @@ function pad(text, width) {
 const inRepo = git(['rev-parse', '--is-inside-work-tree']) === 'true'
 const dirty = new Set(
   inRepo
-    ? git(['status', '--porcelain', '--', 'docs/posts'])
+    ? git(['status', '--porcelain', '--', 'docs/posts', 'docs/diary'])
         .split('\n')
         .filter(Boolean)
         .map((line) => line.slice(3).split(' -> ').pop().trim())
     : []
 )
 
+/** 每个文件的最后一次提交：git log 从新到旧，第一次出现的提交就是它 */
+const lastCommit = new Map()
+if (inRepo) {
+  let head = ''
+  for (const line of git(['log', '--format=@@%h %cs', '--name-only', '--', 'docs/posts', 'docs/diary']).split('\n')) {
+    if (line.startsWith('@@')) {
+      head = line.slice(2)
+      continue
+    }
+    const file = line.trim()
+    if (file && !lastCommit.has(file)) lastCommit.set(file, head)
+  }
+}
+
 const posts = loadPosts({ drafts: 'include' })
 if (!posts.length) {
-  console.log('还没有任何文章。用 pnpm new "标题" 创建第一篇。')
+  console.log('还没有任何内容。用 pnpm new "标题" 创建文章，或 pnpm import:diary 导入日记。')
   process.exit(0)
 }
 
 const rows = posts.map((post) => {
   const file = `docs/${post.file}`
-  const commit = inRepo ? git(['log', '-1', '--format=%h %cs', '--', file]) : ''
   return {
+    collection: post.collection,
     status: post.draft ? '草稿' : '已发布',
     date: post.date || '—',
     title: post.title,
     tags: post.tags.length ? post.tags.map((tag) => `#${tag}`).join(' ') : '—',
     words: String(post.words),
-    commit: commit || '未提交',
+    commit: lastCommit.get(file) || '未提交',
     dirty: dirty.has(file),
     draft: post.draft,
     noDate: !post.date,
   }
 })
 
-const headers = ['状态', '日期', '标题', '标签', '字数', '最后提交']
-const widths = headers.map((header, index) => {
-  const key = ['status', 'date', 'title', 'tags', 'words', 'commit'][index]
-  return Math.max(displayWidth(header), ...rows.map((row) => displayWidth(row[key])))
-})
+const HEADERS = ['状态', '日期', '标题', '标签', '字数', '最后提交']
+const KEYS = ['status', 'date', 'title', 'tags', 'words', 'commit']
 
-console.log('\ndeadream 文章状态\n')
-console.log(headers.map((header, index) => pad(header, widths[index])).join('  '))
-console.log(widths.map((width) => '─'.repeat(width)).join('  '))
-for (const row of rows) {
-  const line = [row.status, row.date, row.title, row.tags, row.words, row.commit]
-    .map((cell, index) => pad(cell, widths[index]))
-    .join('  ')
-  console.log(`${line}${row.dirty ? '  *' : ''}`)
+function renderTable(list) {
+  const widths = HEADERS.map((header, index) =>
+    Math.max(displayWidth(header), ...list.map((row) => displayWidth(row[KEYS[index]])))
+  )
+  console.log(HEADERS.map((header, index) => pad(header, widths[index])).join('  '))
+  console.log(widths.map((width) => '─'.repeat(width)).join('  '))
+  for (const row of list) {
+    const line = KEYS.map((key, index) => pad(row[key], widths[index])).join('  ')
+    console.log(`${line}${row.dirty ? '  *' : ''}`)
+  }
 }
 
-const published = rows.filter((row) => !row.draft).length
-const drafts = rows.length - published
+const postRows = rows.filter((row) => row.collection === 'post')
+const diaryRows = rows.filter((row) => row.collection === 'diary')
+
+console.log('\ndeadream 内容状态\n')
+if (postRows.length) {
+  console.log('【文章】')
+  renderTable(postRows)
+  console.log()
+}
+if (diaryRows.length) {
+  const shown = showAll ? diaryRows : diaryRows.slice(0, 5)
+  console.log(`【日记】共 ${diaryRows.length} 篇${showAll ? '' : '（最近 5 篇，全部用 pnpm track --all）'}`)
+  renderTable(shown)
+  console.log()
+}
+
+const summarize = (list) => {
+  const published = list.filter((row) => !row.draft).length
+  const drafts = list.length - published
+  return `${published} 已发布${drafts ? ` · ${drafts} 草稿` : ''}`
+}
 const dirtyCount = rows.filter((row) => row.dirty).length
-console.log(`\n已发布 ${published} · 草稿 ${drafts}${dirtyCount ? ` · 未提交改动 ${dirtyCount}（*）` : ''}`)
+console.log(`文章 ${postRows.length}（${summarize(postRows)}）· 日记 ${diaryRows.length}（${summarize(diaryRows)}）${dirtyCount ? ` · 未提交改动 ${dirtyCount}（*）` : ''}`)
 
 const hints = []
-if (rows.some((row) => row.noDate)) hints.push('有文章缺少 date，列表顺序会不稳定，请补上 frontmatter 的 date。')
+if (rows.some((row) => row.noDate)) hints.push('有内容缺少 date，列表顺序会不稳定，请补上 frontmatter 的 date。')
 if (dirtyCount) hints.push('有未提交的改动：pnpm ship')
-if (drafts) hints.push(`有 ${drafts} 篇草稿：把 frontmatter 的 draft 改成 false 即会发布。`)
-if (!hints.length) hints.push('一切干净：pnpm new "标题" 开写，pnpm ship 发布。')
+if (rows.some((row) => row.draft)) hints.push(`有草稿：把 frontmatter 的 draft 改成 false 即会发布。`)
+if (!hints.length) hints.push('一切干净：pnpm new "标题" 写文章，pnpm import:diary 导入日记，pnpm ship 发布。')
 console.log(`\n${hints.map((hint) => `· ${hint}`).join('\n')}\n`)

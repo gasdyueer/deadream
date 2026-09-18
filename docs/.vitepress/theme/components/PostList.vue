@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { withBase } from 'vitepress'
-import { data as posts, type Post } from '../posts.data'
+import { data as posts } from '../posts.data'
+import { data as diary } from '../diary.data'
+import type { Post } from '../posts.data'
 
 const props = withDefaults(
   defineProps<{
+    /** 分类：文章 / 日记 */
+    collection?: 'post' | 'diary'
     /** 最多显示几篇，0 表示全部 */
     limit?: number
     /** 只显示包含该标签的文章 */
@@ -15,13 +19,17 @@ const props = withDefaults(
     groupByYear?: boolean
     /** 是否显示摘要与标签 */
     detailed?: boolean
+    /** 隐藏日期列（日记标题里已含日期） */
+    hideDate?: boolean
   }>(),
-  { limit: 0, tag: '', sort: 'date', groupByYear: false, detailed: true }
+  { collection: 'post', limit: 0, tag: '', sort: 'date', groupByYear: false, detailed: true, hideDate: false }
 )
+
+const source = computed<Post[]>(() => (props.collection === 'diary' ? diary : posts))
 
 const visible = computed<Post[]>(() => {
   const key = props.sort === 'updated' ? 'updated' : 'date'
-  const list = props.tag ? posts.filter((post) => post.tags.includes(props.tag as string)) : [...posts]
+  const list = props.tag ? source.value.filter((post) => post.tags.includes(props.tag as string)) : [...source.value]
   list.sort((a, b) => (b[key] || b.date).localeCompare(a[key] || a.date) || a.title.localeCompare(b.title))
   return props.limit > 0 ? list.slice(0, props.limit) : list
 })
@@ -41,7 +49,7 @@ const groups = computed(() => {
 </script>
 
 <template>
-  <p v-if="!visible.length" class="post-empty">暂无文章。</p>
+  <p v-if="!visible.length" class="post-empty">暂无内容。</p>
 
   <template v-else-if="groupByYear">
     <section v-for="group in groups" :key="group.year" class="post-group">
@@ -51,11 +59,17 @@ const groups = computed(() => {
       </h2>
       <ul class="post-list post-list-compact">
         <li v-for="post in group.items" :key="post.url">
-          <time class="post-date" :datetime="post.date">{{ post.date.slice(5) }}</time>
+          <time v-if="!hideDate" class="post-date" :datetime="post.date">{{ post.date.slice(5) }}</time>
           <a class="post-link" :href="withBase(post.url)">{{ post.title }}</a>
           <span v-if="post.updated !== post.date" class="post-updated">更新 {{ post.updated }}</span>
           <span class="post-tags">
-            <a v-for="tag in post.tags" :key="tag" class="post-tag" :href="withBase(`/tags#${encodeURIComponent(tag)}`)">#{{ tag }}</a>
+            <a
+              v-for="tag in post.collection === 'diary' ? [] : post.tags"
+              :key="tag"
+              class="post-tag"
+              :href="withBase(`/tags#${encodeURIComponent(tag)}`)"
+              >#{{ tag }}</a
+            >
           </span>
         </li>
       </ul>
@@ -67,10 +81,12 @@ const groups = computed(() => {
       <a class="post-link" :href="withBase(post.url)">{{ post.title }}</a>
       <p v-if="detailed" class="post-desc">{{ post.description }}</p>
       <p v-if="detailed" class="post-meta-line">
-        <time :datetime="post.date">{{ post.date }}</time>
+        <time v-if="!hideDate" :datetime="post.date">{{ post.date }}</time>
         <span v-if="post.updated !== post.date">· 更新 {{ post.updated }}</span>
         <span>· {{ post.minutes }} 分钟</span>
-        <a v-for="tag in post.tags" :key="tag" class="post-tag" :href="withBase(`/tags#${encodeURIComponent(tag)}`)">#{{ tag }}</a>
+        <template v-if="post.collection !== 'diary'">
+          <a v-for="tag in post.tags" :key="tag" class="post-tag" :href="withBase(`/tags#${encodeURIComponent(tag)}`)">#{{ tag }}</a>
+        </template>
       </p>
     </li>
   </ul>

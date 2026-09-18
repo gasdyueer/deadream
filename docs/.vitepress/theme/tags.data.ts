@@ -10,10 +10,10 @@ export interface TagGroup {
 declare const data: TagGroup[]
 export { data }
 
-/** 标签聚合，供标签页使用（在 Node 端算好，组件不引入任何 node 模块）。 */
+/** 标签聚合（只看「文章」分类，日记自成一类不参与打标）。 */
 export default defineLoader({
   watch: ['posts/**/*.md'],
   load(): TagGroup[] {
-    return groupByTag(loadPosts())
+    return groupByTag(loadPosts({ collections: ['post'] }))
   },
 })
