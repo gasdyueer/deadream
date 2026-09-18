@@ -213,5 +213,11 @@ export async function transformBody(raw, { store, entryDir, stats }) {
     return text
   })
 
+  // ==高亮== → <mark>（markdown-it 不认识这个语法，不转换就会原样显示）；代码里跳过
+  out = out
+    .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
+    .map((segment, index) => (index % 2 ? segment : segment.replace(/==([^=\n]+?)==/g, '<mark>$1</mark>')))
+    .join('')
+
   return out
 }
