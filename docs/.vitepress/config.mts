@@ -55,6 +55,13 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
   srcExclude: drafts,
+  vite: {
+    build: {
+      // 搜索索引 chunk 有 ~2MB（含全部日记，中文二元分词的代价），vite 默认 500kB 的提醒对它没意义：
+      // 这个 chunk 只在打开搜索框时才动态 import，不进首屏
+      chunkSizeWarningLimit: 3000,
+    },
+  },
   sitemap: {
     // hostname 只到源站；VitePress 用 new URL(page, hostname) 拼接，base 会被吃掉，所以靠 transformItems 补回来
     hostname: new URL(siteUrl).origin,
