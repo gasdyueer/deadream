@@ -116,7 +116,7 @@ node scripts/import-posts.mjs "D:/Note/social death/2024暑假总结.md" --tags 
 node scripts/import-posts.mjs --collection video --tags Blender "D:/Note/social death/做片笔记/Blender小技巧.md"
 ```
 
-它会转换 Obsidian 语法、把被引用的图片压成 JPEG 放进 `docs/public/images/<分类>/<slug>/`，写出 `docs/<分类>/<日期-slug>.md`。改完原笔记再跑一次是覆盖，于是在追踪表里就显示成一次「✏️ 更新」。
+它会转换 Obsidian 语法、把被引用的图片处理成站点图片（静图转 JPEG，动图转成保留动画的 WebP），写出 `docs/<分类>/<日期-slug>.md`。改完原笔记再跑一次是覆盖，于是在追踪表里就显示成一次「✏️ 更新」。
 
 分类本身声明在 `docs/.vitepress/lib/posts.mjs` 的 `COLLECTIONS` 里，目录名即 URL 前缀。
 
