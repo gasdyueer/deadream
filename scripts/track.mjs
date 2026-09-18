@@ -2,10 +2,13 @@
 import { execFileSync } from 'node:child_process'
 import { loadPosts } from '../docs/.vitepress/lib/posts.mjs'
 
-/** 执行 git 命令，失败时返回空串而不是抛错。 */
+/** 执行 git 命令，失败时返回空串而不是抛错。core.quotepath=false 保证中文路径不被转义。 */
 function git(args) {
   try {
-    return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    return execFileSync('git', ['-c', 'core.quotepath=false', ...args], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
   } catch {
     return ''
   }

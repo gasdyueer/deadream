@@ -43,7 +43,12 @@ for (let index = 0; index < argv.length; index++) {
 
 function git(args, optional = false) {
   try {
-    return execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    // core.quotepath=false：否则非 ASCII 路径会被转义成 "..."，Linux/CI 上默认开启
+    return execFileSync('git', ['-c', 'core.quotepath=false', ...args], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
   } catch (error) {
     if (optional) return ''
     throw error
