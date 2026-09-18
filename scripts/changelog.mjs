@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { loadPosts, parsePost } from '../docs/.vitepress/lib/posts.mjs'
+import { COLLECTIONS, loadPosts, parsePost } from '../docs/.vitepress/lib/posts.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -64,8 +64,9 @@ const head = options.head || 'HEAD'
 const base = options.base && !/^0+$/.test(options.base) ? options.base : git(['rev-parse', '--verify', '--quiet', `${head}^`], true)
 const site = options.site.replace(/\/+$/, '')
 
-/** 内容目录：文章与日记分开统计 */
-const CONTENT_DIRS = ['docs/posts', 'docs/diary']
+/** 内容目录与分类标签都由 COLLECTIONS 决定，加分类时这里不用改 */
+const CONTENT_DIRS = COLLECTIONS.map((collection) => `docs/${collection.dir}`)
+const LABEL_OF = Object.fromEntries(COLLECTIONS.map((collection) => [`docs/${collection.dir}/`, collection.label]))
 
 function collectRows() {
   const lines = base
@@ -94,10 +95,11 @@ function collectRows() {
 
 const changes = collectRows().map((row) => {
   const relative = (target) => target.replace(/^docs\//, '')
+  const prefix = Object.keys(LABEL_OF).find((dir) => row.path.startsWith(dir)) ?? 'docs/posts/'
   return {
     code: row.code,
-    collection: row.path.startsWith('docs/diary/') ? 'diary' : 'post',
-    oldTitle: row.oldRaw ? parsePost(relative(row.oldPath), row.oldRaw) : null,
+    collection: prefix,
+    oldPost: row.oldRaw ? parsePost(relative(row.oldPath), row.oldRaw) : null,
     newPost: row.newRaw ? parsePost(relative(row.path), row.newRaw) : null,
   }
 })
@@ -106,9 +108,9 @@ function label(change) {
   if (change.code === 'D') return '🗑️ 删除'
   if (change.code === 'A') return '🆕 新增'
   if (change.code === 'R' || change.code === 'C') return '🔀 重命名'
-  if (change.oldTitle && change.newPost) {
-    if (change.oldTitle.draft !== change.newPost.draft) return change.newPost.draft ? '📥 转为草稿' : '🚀 发布'
-    if (change.oldTitle.hash === change.newPost.hash) return '🏷️ 元信息'
+  if (change.oldPost && change.newPost) {
+    if (change.oldPost.draft !== change.newPost.draft) return change.newPost.draft ? '📥 转为草稿' : '🚀 发布'
+    if (change.oldPost.hash === change.newPost.hash) return '🏷️ 元信息'
   }
   return '✏️ 更新'
 }
@@ -122,9 +124,9 @@ function renderChanges() {
   const rows = changes.map((change) => {
     const status = label(change)
     counts.set(status, (counts.get(status) ?? 0) + 1)
-    const post = change.newPost ?? change.oldTitle
+    const post = change.newPost ?? change.oldPost
     const link = site && post && change.code !== 'D' && !post.draft ? `[打开](${site}${post.url})` : '—'
-    const kind = change.collection === 'diary' ? '日记' : '文章'
+    const kind = LABEL_OF[change.collection] ?? '文章'
     return `| ${status} | ${kind} | ${cell(post?.title ?? '—')} | ${post?.date || '—'} | ${cell(post?.tags.join(' ')) || '—'} | ${link} |`
   })
 
@@ -164,13 +166,15 @@ function renderOthers() {
 function renderManifest() {
   if (!options.manifest || !existsSync(options.manifest)) return ''
   const manifest = JSON.parse(readFileSync(options.manifest, 'utf8'))
-  const diaryCount = loadPosts({ collections: ['diary'] }).length
+  const others = COLLECTIONS.filter((collection) => collection.name !== 'post')
+    .map((collection) => `${collection.label} ${loadPosts({ collections: [collection.name] }).length}`)
+    .join(' · ')
   const drafts = changes.filter((change) => change.newPost?.draft).length
   return [
     '',
-    `### 站点内容（文章 ${manifest.count} 篇 · 日记 ${diaryCount} 篇${drafts ? `，本次涉及 ${drafts} 篇草稿` : ''}）`,
+    `### 站点内容（文章 ${manifest.count} 篇${others ? ` · ${others}` : ''}${drafts ? `，本次涉及 ${drafts} 篇草稿` : ''}）`,
     '',
-    '订阅源与 posts.json 只收「文章」分类，日记不参与。',
+    '订阅源与 posts.json 只收「文章」分类，其他分类不参与。',
     '',
     '| 日期 | 标题 | 标签 | 字数 |',
     '| --- | --- | --- | --- |',

@@ -11,7 +11,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import matter from 'gray-matter'
-import { DOCS_DIR } from '../docs/.vitepress/lib/posts.mjs'
+import { COLLECTIONS, DOCS_DIR } from '../docs/.vitepress/lib/posts.mjs'
 import { createImageStore, createStats, slugify, transformBody } from './lib/import-note.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
@@ -21,7 +21,8 @@ const argv = process.argv.slice(2).flatMap((arg) =>
 )
 
 const options = {
-  attachments: '',
+  collection: 'post',
+  attachments: [],
   tags: [],
   date: '',
   slug: '',
@@ -34,8 +35,11 @@ const files = []
 for (let index = 0; index < argv.length; index++) {
   const value = () => argv[++index] ?? ''
   switch (argv[index]) {
+    case '--collection':
+      options.collection = value()
+      break
     case '--attachments':
-      options.attachments = value()
+      options.attachments.push(...value().split(path.delimiter).filter(Boolean))
       break
     case '--tags':
       options.tags.push(...value().split(/[,，\s]+/).filter(Boolean))
@@ -60,9 +64,10 @@ for (let index = 0; index < argv.length; index++) {
       break
     case '-h':
     case '--help':
-      console.log(`用法：node scripts/import-posts.mjs <笔记.md>... [--attachments <图片目录>] [--tags a,b] [--date YYYY-MM-DD] [--slug x] [--dry-run]
+      console.log(`用法：node scripts/import-posts.mjs <笔记.md>... [--collection post|diary|video] [--attachments <附件目录>] [--tags a,b] [--date YYYY-MM-DD] [--slug x] [--dry-run]
 
-  --attachments  附件目录，默认取笔记同级目录的 images/ 与父目录的 images/
+  --collection   导入到哪个分类（默认 post），目录与图片目录由 COLLECTIONS 决定
+  --attachments  额外附件目录，可重复；默认还会找笔记同级与上级的 images/ 以及笔记同级目录
   --date         覆盖日期，默认取 frontmatter.date 或文件修改时间
   --slug         覆盖文件名片段，单文件时才有意义`)
       process.exit(0)
@@ -78,8 +83,14 @@ if (!files.length) {
   process.exit(1)
 }
 
-const OUT_DIR = path.join(DOCS_DIR, 'posts')
-const IMAGE_ROOT = path.join(DOCS_DIR, 'public', 'images', 'posts')
+const collection = COLLECTIONS.find((item) => item.name === options.collection)
+if (!collection) {
+  console.error(`未知分类：${options.collection}（可用：${COLLECTIONS.map((item) => item.name).join(' / ')}）`)
+  process.exit(1)
+}
+
+const OUT_DIR = path.join(DOCS_DIR, collection.dir)
+const IMAGE_ROOT = path.join(DOCS_DIR, 'public', 'images', collection.dir)
 const PLUGIN_KEYS = ['zhihu-title', 'zhihu-topics', 'zhihu-link', 'zhihu-created-at']
 
 /** 文件修改时间的本地日期 */
@@ -120,13 +131,18 @@ async function main() {
 
     const noteDir = path.dirname(path.resolve(file))
     const parentDir = path.dirname(noteDir)
-    const sourceDirs = options.attachments
-      ? [path.resolve(options.attachments)]
-      : [...new Set([path.join(noteDir, 'images'), path.join(parentDir, 'images'), noteDir])]
+    const sourceDirs = [
+      ...new Set([
+        ...options.attachments.map((dir) => path.resolve(dir)),
+        path.join(noteDir, 'images'),
+        path.join(parentDir, 'images'),
+        noteDir,
+      ]),
+    ]
 
     const store = createImageStore({
       outDir: path.join(IMAGE_ROOT, stem),
-      urlPrefix: `/images/posts/${encodeURI(stem)}`,
+      urlPrefix: `/images/${collection.dir}/${encodeURI(stem)}`,
       sourceDirs,
       maxWidth: options.maxWidth,
       quality: options.quality,
@@ -158,7 +174,7 @@ async function main() {
     const dropped = Object.keys(parsed.data).filter((key) => PLUGIN_KEYS.includes(key))
     summaries.push({
       file: path.basename(file),
-      target: `docs/posts/${stem}.md`,
+      target: `docs/${collection.dir}/${stem}.md`,
       action: sameNote ? '覆盖' : '新增',
       title,
       date,
@@ -172,6 +188,7 @@ async function main() {
   }
   console.log(`
 文章导入${options.dryRun ? '（dry-run，未写入）' : '完成'}
+  分类      ${collection.label}（docs/${collection.dir}）
   文章      ${summaries.length}
   图片      新转换 ${stats.images}、复用 ${stats.reusedImages}，共写入 ${(stats.storedBytes / 1048576).toFixed(1)}MB
   缺失图片  ${stats.missingImages.length}${stats.missingImages.length ? `\n            ${[...new Set(stats.missingImages)].join('\n            ')}` : ''}

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process'
-import { loadPosts } from '../docs/.vitepress/lib/posts.mjs'
+import { COLLECTIONS, loadPosts } from '../docs/.vitepress/lib/posts.mjs'
 
 /** 执行 git 命令，失败时返回空串而不是抛错。core.quotepath=false 保证中文路径不被转义。 */
 function git(args) {
@@ -70,6 +70,7 @@ const rows = posts.map((post) => {
   const file = `docs/${post.file}`
   return {
     collection: post.collection,
+    collectionLabel: post.collectionLabel,
     status: post.draft ? '草稿' : '已发布',
     date: post.date || '—',
     title: post.title,
@@ -97,18 +98,21 @@ function renderTable(list) {
   }
 }
 
-const postRows = rows.filter((row) => row.collection === 'post')
-const diaryRows = rows.filter((row) => row.collection === 'diary')
+const byCollection = new Map(COLLECTIONS.map((collection) => [collection.name, []]))
+for (const row of rows) {
+  const bucket = byCollection.get(row.collection)
+  if (bucket) bucket.push(row)
+  else byCollection.set(row.collection, [row])
+}
 
 console.log('\ndeadream 内容状态\n')
-if (postRows.length) {
-  console.log('【文章】')
-  renderTable(postRows)
-  console.log()
-}
-if (diaryRows.length) {
-  const shown = showAll ? diaryRows : diaryRows.slice(0, 5)
-  console.log(`【日记】共 ${diaryRows.length} 篇${showAll ? '' : '（最近 5 篇，全部用 pnpm track --all）'}`)
+for (const { name, label } of COLLECTIONS) {
+  const list = byCollection.get(name) ?? []
+  if (!list.length) continue
+  // 条目多的分类默认只列最近几条，免得刷屏
+  const shown = showAll || list.length <= 20 ? list : list.slice(0, 5)
+  const more = shown.length < list.length ? `（只列最近 ${shown.length} 条，全部用 pnpm track --all）` : ''
+  console.log(`【${label}】共 ${list.length} 条${more}`)
   renderTable(shown)
   console.log()
 }
@@ -119,11 +123,15 @@ const summarize = (list) => {
   return `${published} 已发布${drafts ? ` · ${drafts} 草稿` : ''}`
 }
 const dirtyCount = rows.filter((row) => row.dirty).length
-console.log(`文章 ${postRows.length}（${summarize(postRows)}）· 日记 ${diaryRows.length}（${summarize(diaryRows)}）${dirtyCount ? ` · 未提交改动 ${dirtyCount}（*）` : ''}`)
+const totals = COLLECTIONS.map(({ name, label }) => {
+  const list = byCollection.get(name) ?? []
+  return `${label} ${list.length}（${summarize(list)}）`
+}).join(' · ')
+console.log(`${totals}${dirtyCount ? ` · 未提交改动 ${dirtyCount}（*）` : ''}`)
 
 const hints = []
 if (rows.some((row) => row.noDate)) hints.push('有内容缺少 date，列表顺序会不稳定，请补上 frontmatter 的 date。')
 if (dirtyCount) hints.push('有未提交的改动：pnpm ship')
 if (rows.some((row) => row.draft)) hints.push(`有草稿：把 frontmatter 的 draft 改成 false 即会发布。`)
-if (!hints.length) hints.push('一切干净：pnpm new "标题" 写文章，pnpm import:diary 导入日记，pnpm ship 发布。')
+if (!hints.length) hints.push('一切干净：pnpm new "标题" 写文章，pnpm import:posts / pnpm import:diary 导入笔记，pnpm ship 发布。')
 console.log(`\n${hints.map((hint) => `· ${hint}`).join('\n')}\n`)

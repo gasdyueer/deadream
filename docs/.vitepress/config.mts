@@ -3,7 +3,7 @@ import path from 'node:path'
 import { defineConfig } from 'vitepress'
 import taskLists from 'markdown-it-task-lists'
 import { renderFeed, renderManifest } from './lib/feed.mjs'
-import { draftFiles, loadPosts } from './lib/posts.mjs'
+import { COLLECTIONS, draftFiles, loadPosts } from './lib/posts.mjs'
 
 /** 站点根地址（含 base，无尾斜杠），CI 通过 SITE_URL 注入 */
 const siteUrl = (process.env.SITE_URL || 'https://gasdyueer.github.io/deadream').replace(/\/+$/, '')
@@ -47,6 +47,7 @@ export default defineConfig({
     nav: [
       { text: '文章', link: '/posts/' },
       { text: '日记', link: '/diary/' },
+      { text: '做片笔记', link: '/video/' },
       { text: '归档', link: '/archive' },
       { text: '标签', link: '/tags' },
       { text: 'RSS', link: '/feed.rss' },
@@ -62,7 +63,7 @@ export default defineConfig({
     returnToTopLabel: '回到顶部',
     externalLinkIcon: true,
     footer: {
-      message: `共 ${loadPosts({ collections: ['post'] }).length} 篇文章 · ${loadPosts({ collections: ['diary'] }).length} 篇日记 · 基于 VitePress 构建`,
+      message: `${COLLECTIONS.map((collection) => `${loadPosts({ collections: [collection.name] }).length} ${collection.label}`).join(' · ')} · 基于 VitePress 构建`,
       copyright: '© 2026 deadream',
     },
     socialLinks: [{ icon: 'github', link: repoUrl }],

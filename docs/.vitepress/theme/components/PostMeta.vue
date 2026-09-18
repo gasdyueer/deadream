@@ -1,34 +1,32 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useData, withBase } from 'vitepress'
-import { data as posts } from '../posts.data'
-import { data as diary } from '../diary.data'
-import type { Post } from '../posts.data'
+import { data as collections, type Post } from '../collections.data'
 
 const { page } = useData()
 
-/** 当前页面若是一篇文章或日记，取出它的元信息 */
-const post = computed<Post | undefined>(() =>
-  [...posts, ...diary].find((item) => item.file === page.value.relativePath)
+/** 当前页面若属于某个分类，取出它的元信息 */
+const entry = computed<Post | undefined>(() =>
+  collections.flatMap((group) => group.posts).find((item) => item.file === page.value.relativePath)
 )
 </script>
 
 <template>
-  <div v-if="post" class="post-meta-bar">
+  <div v-if="entry" class="post-meta-bar">
     <span class="post-meta-item">
-      <span class="post-meta-label">{{ post.collection === 'diary' ? '写于' : '发布于' }}</span>
-      <time :datetime="post.date">{{ post.date }}</time>
+      <span class="post-meta-label">{{ entry.collection === 'diary' ? '写于' : '发布于' }}</span>
+      <time :datetime="entry.date">{{ entry.date }}</time>
     </span>
-    <span v-if="post.updated !== post.date" class="post-meta-item">
+    <span v-if="entry.updated !== entry.date" class="post-meta-item">
       <span class="post-meta-label">更新于</span>
-      <time :datetime="post.updated">{{ post.updated }}</time>
+      <time :datetime="entry.updated">{{ entry.updated }}</time>
     </span>
-    <span class="post-meta-item">{{ post.words }} 字 · 约 {{ post.minutes }} 分钟</span>
+    <span class="post-meta-item">{{ entry.words }} 字 · 约 {{ entry.minutes }} 分钟</span>
     <span class="post-meta-item">
-      <a class="post-tag" :href="withBase(post.collection === 'diary' ? '/diary/' : '/posts/')">{{ post.collectionLabel }}</a>
+      <a class="post-tag" :href="withBase(entry.url.split('/').slice(0, 2).join('/') + '/')">{{ entry.collectionLabel }}</a>
     </span>
-    <span v-if="post.tags.length && post.collection !== 'diary'" class="post-meta-tags">
-      <a v-for="tag in post.tags" :key="tag" class="post-tag" :href="withBase(`/tags#${encodeURIComponent(tag)}`)">#{{ tag }}</a>
+    <span v-if="entry.tags.length && entry.collection !== 'diary'" class="post-meta-tags">
+      <a v-for="tag in entry.tags" :key="tag" class="post-tag" :href="withBase(`/tags#${encodeURIComponent(tag)}`)">#{{ tag }}</a>
     </span>
   </div>
 </template>

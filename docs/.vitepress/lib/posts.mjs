@@ -14,6 +14,7 @@ export const DIARY_DIRNAME = 'diary'
 export const COLLECTIONS = [
   { name: 'post', dir: POSTS_DIRNAME, label: '文章' },
   { name: 'diary', dir: DIARY_DIRNAME, label: '日记' },
+  { name: 'video', dir: 'video', label: '做片笔记' },
 ]
 /** 文章目录绝对路径 */
 export const POSTS_DIR = path.join(DOCS_DIR, POSTS_DIRNAME)

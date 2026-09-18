@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { withBase } from 'vitepress'
-import { data as posts } from '../posts.data'
-import { data as diary } from '../diary.data'
-import type { Post } from '../posts.data'
+import { data as collections, type CollectionName, type Post } from '../collections.data'
 
 const props = withDefaults(
   defineProps<{
-    /** 分类：文章 / 日记 */
-    collection?: 'post' | 'diary'
+    /** 分类：文章 / 日记 / 做片笔记 */
+    collection?: CollectionName
     /** 最多显示几篇，0 表示全部 */
     limit?: number
-    /** 只显示包含该标签的文章 */
+    /** 只显示包含该标签的内容 */
     tag?: string
     /** 排序依据：发布日期或最后更新日期 */
     sort?: 'date' | 'updated'
@@ -25,7 +23,7 @@ const props = withDefaults(
   { collection: 'post', limit: 0, tag: '', sort: 'date', groupByYear: false, detailed: true, hideDate: false }
 )
 
-const source = computed<Post[]>(() => (props.collection === 'diary' ? diary : posts))
+const source = computed<Post[]>(() => collections.find((item) => item.name === props.collection)?.posts ?? [])
 
 const visible = computed<Post[]>(() => {
   const key = props.sort === 'updated' ? 'updated' : 'date'

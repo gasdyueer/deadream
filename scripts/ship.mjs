@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
-import { parsePost } from '../docs/.vitepress/lib/posts.mjs'
+import { COLLECTIONS, parsePost } from '../docs/.vitepress/lib/posts.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -71,16 +71,18 @@ if (!staged.length) {
   process.exit(0)
 }
 
-/** 内容目录：文章与日记 */
-const CONTENT_DIRS = ['docs/posts/', 'docs/diary/']
-const COLLECTION_LABEL = { post: '文章', diary: '日记' }
+/** 内容目录与分类标签都由 COLLECTIONS 决定，加分类时这里不用改 */
+const CONTENT_DIRS = COLLECTIONS.map((collection) => `docs/${collection.dir}/`)
+const LABEL_BY_NAME = new Map(COLLECTIONS.map((collection) => [collection.name, collection.label]))
+const COLLECTION_BY_DIR = new Map(COLLECTIONS.map((collection) => [`docs/${collection.dir}/`, collection.name]))
 
 const content = staged
   .filter((change) => CONTENT_DIRS.some((dir) => change.path.startsWith(dir)) && change.path.endsWith('.md'))
   .filter((change) => path.basename(change.path) !== 'index.md')
   .map((change) => {
     const relative = change.path.replace(/^docs\//, '')
-    const collection = relative.startsWith('diary/') ? 'diary' : 'post'
+    const prefix = CONTENT_DIRS.find((dir) => change.path.startsWith(dir))
+    const collection = COLLECTION_BY_DIR.get(prefix) ?? 'post'
     // 刚执行过 git add -A，工作区内容即暂存内容；删除的文件没有内容可读
     if (change.code === 'D') return { ...change, collection, title: path.basename(relative, '.md') }
     const abs = path.join(process.cwd(), change.path)
@@ -100,7 +102,7 @@ function formatTitles(titles) {
 function buildMessage() {
   const segments = []
   const collections = new Set()
-  for (const collection of ['post', 'diary']) {
+  for (const { name: collection } of COLLECTIONS) {
     const pick = (codes) =>
       content.filter((change) => change.collection === collection && codes.includes(change.code)).map((change) => change.title)
     const parts = []
@@ -116,10 +118,10 @@ function buildMessage() {
   }
   if (!segments.length) return `chore: 更新站点（${staged.length} 个文件）`
 
-  // 只有一类内容时不必重复说明分类；两类都动了才带前缀
+  // 只有一类内容时不必重复说明分类；多类都动了才带前缀
   const scope = collections.size === 1 ? [...collections][0] : 'content'
   const mixed = collections.size > 1
-  const body = segments.map((segment) => `${mixed ? COLLECTION_LABEL[segment.collection] : ''}${segment.text}`).join('；')
+  const body = segments.map((segment) => `${mixed ? (LABEL_BY_NAME.get(segment.collection) ?? '') : ''}${segment.text}`).join('；')
   return `${scope}: ${body}`
 }
 
@@ -129,7 +131,7 @@ const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}
 
 console.log(`待提交 ${staged.length} 个文件${content.length ? `，其中内容 ${content.length} 篇` : ''}：`)
 for (const item of content.slice(0, 10)) {
-  console.log(`  ${item.code}  ${COLLECTION_LABEL[item.collection]}  ${item.title}`)
+  console.log(`  ${item.code}  ${LABEL_BY_NAME.get(item.collection) ?? '文章'}  ${item.title}`)
 }
 if (content.length > 10) console.log(`  …另有 ${content.length - 10} 篇`)
 console.log(`\n提交信息：${message}`)

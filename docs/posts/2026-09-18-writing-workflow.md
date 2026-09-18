@@ -98,17 +98,25 @@ curl -s <站点地址>/posts.json | jq '.count'
 
 CI 的文章变更表会据此区分「🏷️ 元信息」和「✏️ 更新」，不用点进 diff 也能看出这次动了什么。
 
-## 另一类内容：日记
+## 其他分类
 
-`/diary/` 是从 Obsidian 日记库导入的独立分类，500+ 条，按年分组。它和「文章」共用同一套解析、列表与追踪机制，但不进 RSS 与 `posts.json`。
+除了「文章」，站点还有两类内容：
+
+- **日记** `/diary/`：Obsidian 日记库整库导入，500+ 条，按年分组；
+- **做片笔记** `/video/`：Blender / AE / MMD / AviUtl 的操作笔记，以及 MV 与 MAD 的拉片、创作经验。
+
+它们和「文章」共用同一套解析、列表与追踪机制，但不进 RSS 与 `posts.json`——几百条旧内容会把真正的新东西淹掉。
 
 导入是幂等的：加完新日记再跑一次 `pnpm import:diary` 即可，已经转好的图片会跳过。
 
-单篇笔记想搬成文章用 `pnpm import-posts`：
+单篇笔记想搬进某个分类：
 
 ```bash
 node scripts/import-posts.mjs "D:/Note/social death/2024暑假总结.md" --tags 总结,学习
+node scripts/import-posts.mjs --collection video --tags Blender "D:/Note/social death/做片笔记/Blender小技巧.md"
 ```
 
-它会转换 Obsidian 语法、把被引用的图片压成 JPEG 放进 `docs/public/images/posts/<slug>/`，写出 `docs/posts/<日期-slug>.md`。改完原笔记再跑一次是覆盖，于是在追踪表里就显示成一次「✏️ 更新」。
+它会转换 Obsidian 语法、把被引用的图片压成 JPEG 放进 `docs/public/images/<分类>/<slug>/`，写出 `docs/<分类>/<日期-slug>.md`。改完原笔记再跑一次是覆盖，于是在追踪表里就显示成一次「✏️ 更新」。
+
+分类本身声明在 `docs/.vitepress/lib/posts.mjs` 的 `COLLECTIONS` 里，目录名即 URL 前缀。
 
