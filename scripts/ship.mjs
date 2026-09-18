@@ -83,34 +83,39 @@ const content = staged
     return { ...change, collection, title: parsePost(relative, raw).title }
   })
 
-function joinTitles(titles, collection) {
-  // 日记标题就是日期，堆多了没意义
-  if (collection === 'diary' && titles.length > 3) return `${titles.length} 篇`
-  if (titles.length <= 2) return titles.map((title) => `《${title}》`).join('、')
-  return `${titles.length} 篇（${titles.slice(0, 2).map((title) => `《${title}》`).join('、')}…）`
+/**
+ * 标题列表 → 文案片段。数量多时退化成计数，此时前面留一个空格，
+ * 好让「新增《A》」和「新增 12 篇」读起来都对。
+ */
+function formatTitles(titles) {
+  if (titles.length <= 3) return titles.map((title) => `《${title}》`).join('、')
+  return ` ${titles.length} 篇（${titles.slice(0, 2).map((title) => `《${title}》`).join('、')}…）`
 }
 
 function buildMessage() {
-  const parts = []
+  const segments = []
   const collections = new Set()
   for (const collection of ['post', 'diary']) {
     const pick = (codes) =>
       content.filter((change) => change.collection === collection && codes.includes(change.code)).map((change) => change.title)
-    const segments = []
+    const parts = []
     const added = pick(['A'])
     const updated = pick(['M', 'R'])
     const removed = pick(['D'])
-    if (added.length) segments.push(`新增${joinTitles(added, collection)}`)
-    if (updated.length) segments.push(`更新${joinTitles(updated, collection)}`)
-    if (removed.length) segments.push(`删除${joinTitles(removed, collection)}`)
-    if (!segments.length) continue
+    if (added.length) parts.push(`新增${formatTitles(added)}`)
+    if (updated.length) parts.push(`更新${formatTitles(updated)}`)
+    if (removed.length) parts.push(`删除${formatTitles(removed)}`)
+    if (!parts.length) continue
     collections.add(collection)
-    parts.push(`${COLLECTION_LABEL[collection]}${segments.join('、')}`)
+    segments.push({ collection, text: parts.join('；') })
   }
-  if (!parts.length) return `chore: 更新站点（${staged.length} 个文件）`
-  // scope: post / diary / content（两边都动了）
+  if (!segments.length) return `chore: 更新站点（${staged.length} 个文件）`
+
+  // 只有一类内容时不必重复说明分类；两类都动了才带前缀
   const scope = collections.size === 1 ? [...collections][0] : 'content'
-  return `${scope}: ${parts.join('；')}`
+  const mixed = collections.size > 1
+  const body = segments.map((segment) => `${mixed ? COLLECTION_LABEL[segment.collection] : ''}${segment.text}`).join('；')
+  return `${scope}: ${body}`
 }
 
 const message = options.message || buildMessage()

@@ -20,23 +20,29 @@ pnpm ship                             # 提交并推送，自动生成 commit me
 
 文章是 `docs/posts/` 下的 Markdown，frontmatter 见 `docs/posts/2026-09-18-writing-workflow.md`。
 
-## 日记
+## 从 Obsidian 导入
 
-`docs/diary/` 是一个独立分类，来自 Obsidian 日记库的导入：
+两个导入脚本共用同一套转换逻辑（`scripts/lib/import-note.mjs`），源文件只读不删：
+
+| 命令 | 用途 | 输出 |
+| --- | --- | --- |
+| `pnpm import:diary` | 整库导入日记（`Diary/` 下全部 md） | `docs/diary/<日期-时间>.md` + `docs/public/images/diary/` |
+| `pnpm import:posts <笔记.md>...` | 把指定笔记搬成文章 | `docs/posts/<日期-slug>.md` + `docs/public/images/posts/<日期-slug>/` |
 
 ```bash
-pnpm import:diary                                                    # 用默认源目录
-node scripts/import-diary.mjs --source "D:/Note/social death"         # 或指定库目录
+pnpm import:diary
+node scripts/import-diary.mjs --source "D:/Note/social death"
+node scripts/import-posts.mjs "D:/Note/social death/2024暑假总结.md" --tags 总结,学习
 ```
 
-脚本做四件事，源文件只读不删：
+转换规则：
 
-1. 从文件名解析日期时间（`2026年3月30日星期一晚上6点41分.md` → `2026-03-30` 18:41 / `2024-05-21.md`）；
-2. 转换 Obsidian 语法：`![[图.png|alt]]` → `![alt](/images/diary/x.jpg)`，`[[笔记|显示]]` → 纯文本，库内死链只留文字；
-3. 把**被引用到的**图片压成 JPEG（最长边 1920、q82，白底）写到 `docs/public/images/diary/`，原始 840MB → 约 60MB；
-4. 写出 `docs/diary/<slug>.md`（frontmatter 含 title/date/tags）。
+1. **元信息**：日记从文件名解析日期时间（`2026年3月30日星期一晚上6点41分.md` → `2026-03-30` 18:41、`2024-05-21.md`、`20240119.md`）；文章取 frontmatter 的 `title`/`date`（`zhihu-*` 之类的插件字段丢弃），没有就用文件名和修改时间，正文没有一级标题会自动补一个。
+2. **语法**：`![[图.png|alt]]` → `![alt](/images/…)`，`![alt](库内相对路径)` → 同上，`[[笔记|显示]]` → 纯文本，库内死链只留文字；视频与 `.canvas`/`.html` 附件不入库，正文里留一行「未收录」标注。
+3. **图片**：只处理被引用到的图片，压成 JPEG（最长边 1920、q82、白底、按 EXIF 转正）。日记原图 840MB → 60MB。
+4. **幂等**：已转换且比源文件新的图片会跳过（`--force` 强制重转）；文章重新导入会覆盖原文件（标题一致即视为同一篇），所以改了原笔记再跑一次就是一次「更新」。
 
-视频与 `.canvas`/`.html` 附件不入库，正文里留一行「未收录」标注。重复执行是幂等的：已转换且比源文件新的图片会跳过，`--force` 强制重转。
+`--dry-run` 可以只看结果不写盘。
 
 日记只参与站内浏览（`/diary/`），不进 RSS 与 `posts.json` —— 500+ 条会把新内容淹掉。想改这个行为，改 `docs/.vitepress/config.mts` 里 `buildEnd` 的 `collections` 参数。
 
@@ -55,7 +61,9 @@ docs/
     theme/                    自定义主题：内容列表、标签页、内容头部信息条
 scripts/
   new-post.mjs                新建文章
-  import-diary.mjs            导入 Obsidian 日记并转码图片
+  import-diary.mjs            导入 Obsidian 日记库
+  import-posts.mjs            把指定笔记搬成文章
+  lib/import-note.mjs         导入共用：命名、附件查找、图片转码、语法转换
   track.mjs                   内容状态总览（文章 / 日记）
   ship.mjs                    提交并推送
   changelog.mjs               CI 用的内容变更追踪

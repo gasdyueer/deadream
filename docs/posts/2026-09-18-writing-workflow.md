@@ -104,3 +104,11 @@ CI 的文章变更表会据此区分「🏷️ 元信息」和「✏️ 更新�
 
 导入是幂等的：加完新日记再跑一次 `pnpm import:diary` 即可，已经转好的图片会跳过。
 
+单篇笔记想搬成文章用 `pnpm import-posts`：
+
+```bash
+node scripts/import-posts.mjs "D:/Note/social death/2024暑假总结.md" --tags 总结,学习
+```
+
+它会转换 Obsidian 语法、把被引用的图片压成 JPEG 放进 `docs/public/images/posts/<slug>/`，写出 `docs/posts/<日期-slug>.md`。改完原笔记再跑一次是覆盖，于是在追踪表里就显示成一次「✏️ 更新」。
+
