@@ -17,6 +17,36 @@ const repoUrl = 'https://github.com/gasdyueer/deadream'
 
 const drafts = draftFiles()
 
+/**
+ * 中文分词：MiniSearch 默认只按空白和标点切词，一段连续的汉字会整体变成一个词，
+ * 于是「文件夹」能搜到（它恰好被标点独立出来），而「件夹」「建文」搜不到。
+ * 这里按二元组切汉字串（CJK bigram，业界通用做法）：任意 2 字以上的子串都能命中，
+ * 不需要词典，索引体积只是变大一点；拉丁字母与数字整体保留，单字片段原样保留兜底。
+ * 索引与查询都用这一个函数（VitePress 会把 miniSearch.options 同时传给两边）。
+ *
+ * 注意：这个函数会被序列化成源码字符串发到浏览器（闭包里的东西带不过去），
+ * 所以正则必须写在函数体内部。
+ */
+function tokenizeCJK(text: string): string[] {
+  const separator = /[\n\r\p{Z}\p{P}]+/u
+  const hanRun = /(\p{Script=Han}+)/u
+  const hanOnly = /^\p{Script=Han}+$/u
+  const tokens: string[] = []
+  for (const piece of text.split(separator)) {
+    for (const run of piece.split(hanRun)) {
+      if (!run) continue
+      if (!hanOnly.test(run)) {
+        tokens.push(run)
+        continue
+      }
+      const chars = [...run]
+      if (chars.length === 1) tokens.push(chars[0])
+      else for (let index = 0; index < chars.length - 1; index++) tokens.push(chars[index] + chars[index + 1])
+    }
+  }
+  return tokens
+}
+
 export default defineConfig({
   title: siteTitle,
   description: siteDescription,
@@ -52,7 +82,35 @@ export default defineConfig({
       { text: '标签', link: '/tags' },
       { text: 'RSS', link: '/feed.rss' },
     ],
-    search: { provider: 'local' },
+    search: {
+      provider: 'local',
+      options: {
+        miniSearch: {
+          // 索引与查询共用的分词（VitePress 会把这里的 options 一并传给浏览器端）
+          options: { tokenize: tokenizeCJK },
+          searchOptions: {
+            // 与 VitePress 默认一致，只是写出来方便调
+            fuzzy: 0.2,
+            prefix: true,
+            boost: { title: 4, text: 2, titles: 1 },
+          },
+        },
+        translations: {
+          button: { buttonText: '搜索', buttonAriaLabel: '搜索' },
+          modal: {
+            displayDetails: '展开详情',
+            resetButtonTitle: '清空',
+            backButtonTitle: '返回',
+            noResultsText: '没有找到结果',
+            footer: {
+              selectText: '选择',
+              navigateText: '切换',
+              closeText: '关闭',
+            },
+          },
+        },
+      },
+    },
     outline: { level: [2, 3], label: '本页目录' },
     lastUpdated: { text: '最后更新' },
     docFooter: { prev: '上一篇', next: '下一篇' },

@@ -32,6 +32,34 @@ pnpm ship                             # 提交并推送，自动生成 commit me
 
 加一个分类：在 `COLLECTIONS` 里加一行（目录自动扫描、导航与页脚要手动加一项），追踪脚本会跟着走。
 
+## 搜索
+
+用 VitePress 自带的 `local` provider（浏览器端 MiniSearch，构建时把全站按标题切成 1370 个「章节」建索引）。
+
+**中文分词是自定义的**（`config.mts` 里的 `tokenizeCJK`）。MiniSearch 默认只按空白和标点切词，一段连续汉字会整体成一个词：`创建文件夹` 能搜到，「建文」「件夹」搜不到。现在按**二元组**切汉字串（`创建文件夹` → `创建 建文 文件 件夹`），任意 2 字以上的子串都能命中，拉丁字母与数字仍整体保留。
+
+| | 改前（默认分词） | 改后（二元组） |
+| --- | --- | --- |
+| 索引体积 | 1.06MB / 276KB gzip | 2.02MB / **419KB gzip** |
+| 「建文」「件夹」这类子串 | 0 条 | 3 / 10 条 |
+| 「文件夹」「移动平台」 | 2 / 1 条 | 16 / 16 条（第一条都是对应章节） |
+| 英文词（godot / pong） | 正常 | 正常 |
+
+索引只在**打开搜索框时**才加载，不影响首屏。其中 91% 是日记（1247/1370 段）——想让它更小、结果更聚焦，可以给日记加 `search: false` frontmatter（见下），索引会掉到十分之一左右。
+
+配置项都在 `themeConfig.search.options` 里：
+
+- `miniSearch.options.tokenize` — 分词器，**索引与查询共用**（VitePress 把这里的 options 同时传给构建端和浏览器端）
+- `miniSearch.searchOptions` — 查询参数：`fuzzy`（0.2，2 字以上的词才吃容错）、`prefix`（前缀匹配）、`boost`（标题权重 4）、`combineWith`（默认 `or`，多词任中；改成 `and` 会同时要求命中所有词，长句查询会漏）
+- `translations` — 搜索框文案
+
+两个坑（改这个文件时注意）：
+
+1. 分词函数会被**序列化成源码字符串**发到浏览器（`new Function` 复活），闭包里的变量带不过去——正则必须写在函数体内部。
+2. 自定义函数只在 `miniSearch.options` 里写一次就够；写进 `searchOptions` 反而多余。
+
+按页面排除搜索：frontmatter 加 `search: false`（VitePress 内部就是 `env.frontmatter?.search === false ? "" : html`）。
+
 ## 从 Obsidian 导入
 
 两个导入脚本共用同一套转换逻辑（`scripts/lib/import-note.mjs`），源文件只读不删：
