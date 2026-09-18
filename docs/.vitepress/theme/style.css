@@ -1,0 +1,175 @@
+:root {
+  --vp-c-brand-1: #3b5bdb;
+  --vp-c-brand-2: #3352cc;
+  --vp-c-brand-3: #2b46b3;
+  --vp-c-brand-soft: rgba(59, 91, 219, 0.14);
+}
+
+.dark {
+  --vp-c-brand-1: #8fa8ff;
+  --vp-c-brand-2: #7a95fb;
+  --vp-c-brand-3: #6479e0;
+  --vp-c-brand-soft: rgba(143, 168, 255, 0.16);
+}
+
+/*
+ * 这些组件同时用在两个位置：
+ *  - 文章正文里（<PostList> / <TagIndex> 写在 Markdown 中，位于 .vp-doc 内）
+ *  - 文章头部信息条（doc-before 插槽，位于 .vp-doc 之外）
+ * 所以选择器按需带上 .vp-doc，用来盖过 VitePress 的默认排版规则。
+ */
+
+/* ---------- 标签胶囊 ---------- */
+
+.vp-doc .post-tag,
+.post-meta-tags .post-tag {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background-color: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.vp-doc .post-tag:hover,
+.post-meta-tags .post-tag:hover {
+  background-color: var(--vp-c-brand-1);
+  color: #fff;
+}
+
+/* ---------- 文章列表 ---------- */
+
+.vp-doc .post-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vp-doc .post-list > li {
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.vp-doc .post-list > li:last-child {
+  border-bottom: none;
+}
+
+.vp-doc .post-list-detailed > li {
+  padding: 1rem 0;
+}
+
+.vp-doc .post-list-compact > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.vp-doc .post-link {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.vp-doc .post-link:hover {
+  color: var(--vp-c-brand-1);
+}
+
+.vp-doc .post-list-detailed .post-link {
+  font-size: 1.15rem;
+}
+
+.vp-doc .post-desc {
+  margin: 0.35rem 0 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+}
+
+.vp-doc .post-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--vp-c-text-3);
+}
+
+.vp-doc .post-date,
+.vp-doc .post-updated {
+  flex: none;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--vp-c-text-3);
+}
+
+.vp-doc .post-empty,
+.vp-doc .tag-summary {
+  font-size: 0.85rem;
+  color: var(--vp-c-text-3);
+}
+
+/* ---------- 标签页 ---------- */
+
+.vp-doc .tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0 2rem;
+}
+
+.vp-doc .tag-cloud .post-tag {
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.vp-doc .tag-count {
+  opacity: 0.7;
+}
+
+.vp-doc .tag-section {
+  margin-top: 1.5rem;
+}
+
+/* ---------- 归档分组 ---------- */
+
+.vp-doc .post-group {
+  margin-bottom: 1.5rem;
+}
+
+.vp-doc .post-group-count {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  background-color: var(--vp-c-default-soft);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--vp-c-text-2);
+}
+
+/* ---------- 文章头部信息条（.vp-doc 之外） ---------- */
+
+.post-meta-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: -0.5rem 0 1.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px dashed var(--vp-c-divider);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--vp-c-text-3);
+}
+
+.post-meta-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}

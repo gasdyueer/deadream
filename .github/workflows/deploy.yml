@@ -1,0 +1,80 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一次 Pages 部署，排队而不是互相取消
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # 站点根地址与部署路径：仓库改名或换自定义域名时改这里
+  SITE_URL: https://gasdyueer.github.io/deadream
+  BASE_PATH: /deadream/
+
+jobs:
+  build:
+    name: 构建并追踪文章变更
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库（需要完整历史来对比文章变更）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建站点
+        run: pnpm build
+        env:
+          SITE_URL: ${{ env.SITE_URL }}
+          BASE_PATH: ${{ env.BASE_PATH }}
+
+      - name: 生成文章变更追踪
+        run: |
+          node scripts/changelog.mjs \
+            --base "${{ github.event.before }}" \
+            --head "${{ github.sha }}" \
+            --site "$SITE_URL" \
+            --manifest docs/.vitepress/dist/posts.json \
+            --out "$GITHUB_STEP_SUMMARY"
+        env:
+          SITE_URL: ${{ env.SITE_URL }}
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上传构建产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    name: 部署到 GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署
+        id: deployment
+        uses: actions/deploy-pages@v4

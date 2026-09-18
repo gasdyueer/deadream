@@ -1,0 +1,28 @@
+{
+  "name": "deadream",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "deadream — VitePress 博客，部署在 GitHub Pages",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "vitepress dev docs",
+    "build": "vitepress build docs",
+    "preview": "vitepress preview docs",
+    "new": "node scripts/new-post.mjs",
+    "track": "node scripts/track.mjs",
+    "ship": "node scripts/ship.mjs",
+    "changelog": "node scripts/changelog.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "gray-matter": "^4.0.3",
+    "vitepress": "^1.6.4",
+    "vue": "^3.5.13"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
