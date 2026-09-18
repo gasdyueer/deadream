@@ -283,7 +283,7 @@ F键可以切换到选择模式，C键可以切换到取消选择模式
 我们直接拖过来
 ![](/images/posts/2024-10-06-%E8%B7%9F%E7%9D%80-brackeys-%E5%AD%A6-godot-%E7%AC%94%E8%AE%B0/pasted-image-20241005183640.jpg)
 
-注意一下![](/images/posts/2024-10-06-%E8%B7%9F%E7%9D%80-brackeys-%E5%AD%A6-godot-%E7%AC%94%E8%AE%B0/pasted-image-20241005183728.jpg)<mark>一定要在根节点下啊啊啊</mark>
+注意一下![](/images/posts/2024-10-06-%E8%B7%9F%E7%9D%80-brackeys-%E5%AD%A6-godot-%E7%AC%94%E8%AE%B0/pasted-image-20241005183728.jpg)**一定要在根节点下啊啊啊**
 不然会导致整个平台跟着玩家动
 
 运行一下，ok没问题
@@ -646,7 +646,7 @@ ok这是一个右侧射线，现在我们还要一个左侧射线
 	- 最后，根据 `direction` 和 `SPEED` 更新敌人的位置：
 	    - `position.x` 是敌人的X坐标。
 	    - `direction * SPEED * delta` 计算出每帧应该移动的距离。
-	    - `position.x += direction * SPEED * delta` <mark>更新敌人的X坐标，使其向左或向右移动，这是一个通用公式。</mark>
+	    - `position.x += direction * SPEED * delta` **更新敌人的X坐标，使其向左或向右移动，这是一个通用公式。**
 
 然后呢，敌人移动方向变了，自然立绘也要翻转
 那就需要在脚本中对animatedshape2D节点的flip h属性做控制

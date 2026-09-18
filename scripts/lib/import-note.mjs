@@ -213,10 +213,12 @@ export async function transformBody(raw, { store, entryDir, stats }) {
     return text
   })
 
-  // ==高亮== → <mark>（markdown-it 不认识这个语法，不转换就会原样显示）；代码里跳过
+  // ==高亮== / ===高亮=== → 粗体。markdown-it 不认这两个 Obsidian 语法，不转换就会原样显示；
+  // 用 markdown 的 ** 而不是 <mark>：强调的配对交给 markdown-it，它只会生成结构正确的树，
+  // 手写 HTML 标签则可能和 *强调* 交叉嵌套，Vue 直接编译不过。
   out = out
     .split(/(```[\s\S]*?```|`[^`\n]*`)/g)
-    .map((segment, index) => (index % 2 ? segment : segment.replace(/==([^=\n]+?)==/g, '<mark>$1</mark>')))
+    .map((segment, index) => (index % 2 ? segment : segment.replace(/={2,}([^=\n]+?)={2,}/g, '**$1**')))
     .join('')
 
   return out
