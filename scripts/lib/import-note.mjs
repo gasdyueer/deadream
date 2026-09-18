@@ -3,17 +3,24 @@
  * 被 import-diary.mjs（整库导入）和 import-posts.mjs（指定文件搬成文章）共用。
  */
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import sharp from 'sharp'
 
 export const IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.tiff']
 export const VIDEO_EXT = ['.mp4', '.mov', '.webm', '.mkv', '.avi', '.wmv']
 
+/** 可能带动画的格式：这些要按多帧读，动图转成动图 WebP */
+const ANIMATABLE_EXT = ['.gif', '.webp', '.avif', '.png']
+/** 动图输出上限：原 GIF 动辄 1600px 宽、几十 MB，缩到 800 宽约为原体积的 8% */
+const ANIMATED_MAX_WIDTH = 800
+const ANIMATED_QUALITY = 75
+
 /** 统计信息，导入脚本负责打印 */
 export function createStats() {
   return {
     images: 0,
+    animated: 0,
     reusedImages: 0,
     missingImages: [],
     videos: [],
@@ -95,11 +102,23 @@ export function createImageStore({ outDir, urlPrefix, sourceDirs, maxWidth, qual
       }
       if (cache.has(source)) return cache.get(source)
 
+      // 动图必须整段读（默认只读第一帧，会静默丢动画），所以先看元数据
+      const ext = path.extname(target).toLowerCase()
+      const meta = ANIMATABLE_EXT.includes(ext)
+        ? await sharp(source, { animated: true, limitInputPixels: false }).metadata()
+        : await sharp(source).metadata()
+      const isAnimated = (meta.pages ?? 1) > 1
+
       const stem = sanitizeStem(target) || 'image'
       const hash = createHash('sha1').update(target).digest('hex').slice(0, 8)
-      let name = `${stem}.jpg`
+      const suffix = isAnimated ? '.webp' : '.jpg'
+      let name = `${stem}${suffix}`
       const owner = owners.get(name)
-      if (owner && owner !== source) name = `${stem}-${hash}.jpg`
+      if (owner && owner !== source) name = `${stem}-${hash}${suffix}`
+
+      // 早期版本把动图转成了静态 jpg，这里顺手清掉旧产物
+      const stale = path.join(outDir, `${stem}.jpg`)
+      if (isAnimated && existsSync(stale) && !owners.has(`${stem}.jpg`)) rmSync(stale, { force: true })
 
       const dest = path.join(outDir, name)
       const isFresh = existsSync(dest) && !force && statSync(dest).mtimeMs >= statSync(source).mtimeMs
@@ -107,12 +126,20 @@ export function createImageStore({ outDir, urlPrefix, sourceDirs, maxWidth, qual
         stats.reusedImages++
       } else if (!dryRun) {
         mkdirSync(outDir, { recursive: true })
-        await sharp(source, { animated: false })
-          .rotate()
-          .resize({ width: maxWidth, height: maxWidth, fit: 'inside', withoutEnlargement: true })
-          .flatten({ background: '#ffffff' })
-          .jpeg({ quality, mozjpeg: true, progressive: true })
-          .toFile(dest)
+        if (isAnimated) {
+          await sharp(source, { animated: true, limitInputPixels: false })
+            .resize({ width: ANIMATED_MAX_WIDTH, height: ANIMATED_MAX_WIDTH, fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: ANIMATED_QUALITY, effort: 3, loop: meta.loop ?? 0 })
+            .toFile(dest)
+          stats.animated++
+        } else {
+          await sharp(source, { animated: false })
+            .rotate()
+            .resize({ width: maxWidth, height: maxWidth, fit: 'inside', withoutEnlargement: true })
+            .flatten({ background: '#ffffff' })
+            .jpeg({ quality, mozjpeg: true, progressive: true })
+            .toFile(dest)
+        }
         stats.images++
         stats.storedBytes += statSync(dest).size
       }

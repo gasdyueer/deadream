@@ -190,7 +190,7 @@ async function main() {
 文章导入${options.dryRun ? '（dry-run，未写入）' : '完成'}
   分类      ${collection.label}（docs/${collection.dir}）
   文章      ${summaries.length}
-  图片      新转换 ${stats.images}、复用 ${stats.reusedImages}，共写入 ${(stats.storedBytes / 1048576).toFixed(1)}MB
+  图片      新转换 ${stats.images}（其中动图 ${stats.animated}，存为动图 WebP）、复用 ${stats.reusedImages}，共写入 ${(stats.storedBytes / 1048576).toFixed(1)}MB
   缺失图片  ${stats.missingImages.length}${stats.missingImages.length ? `\n            ${[...new Set(stats.missingImages)].join('\n            ')}` : ''}
   视频未收录 ${stats.videos.length}${stats.videos.length ? `（${[...new Set(stats.videos)].join('、')}）` : ''}
   其他附件  ${stats.attachments.length}${stats.attachments.length ? `（${[...new Set(stats.attachments)].join('、')}）` : ''}
