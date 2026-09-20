@@ -19,7 +19,39 @@ pnpm ship                             # 提交并推送，自动生成 commit me
 pnpm upload "D:/Note/…/笔记.md"        # 导入一篇 Obsidian 笔记 → 提交 → 推送，一条命令
 ```
 
-文章是 `docs/posts/` 下的 Markdown，frontmatter 见 `docs/posts/2026-09-18-writing-workflow.md`。
+文章是 `docs/posts/` 下的 Markdown，文件名以日期开头（`docs/posts/YYYY-MM-DD-slug.md`），头部 frontmatter：
+
+```yaml
+---
+title: 标题
+date: 2026-09-18
+tags: [工具, 博客]
+description: 一句话摘要，会显示在列表页和 RSS 里。
+draft: false
+---
+
+# 标题
+
+正文。
+```
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `title` | 是 | 列表、RSS、`<title>` 都用它 |
+| `date` | 是 | `YYYY-MM-DD`，列表和归档按它排序 |
+| `tags` | 否 | 数组或逗号分隔字符串 |
+| `description` | 否 | 不写就自动截取正文前 160 字 |
+| `updated` | 否 | 填了就在归档页的「最近更新」里按它排序 |
+| `draft` | 否 | `true` 时**不构建、不进列表、不出现在 RSS**——`srcExclude` 直接跳过，产物里没有它的 HTML |
+
+`pnpm new` 的常用参数与流程：
+
+```bash
+pnpm new "给 VitePress 加 RSS" --tags 工具,博客
+pnpm new "还没写完的东西" --draft   # 存成草稿，不会被发布
+```
+
+写完 `pnpm dev` 看一眼，再 `pnpm ship` 提交并推送。
 
 ## 分类
 
@@ -163,15 +195,16 @@ scripts/
 
 ## 发布链路
 
-`pnpm ship` → push 到 `main` → Actions 构建 → 部署 Pages。
+`pnpm ship` → push 到 `main` → Actions 构建 → 部署 Pages。`.github/workflows/deploy.yml` 每次运行做四件事：安装依赖并 `pnpm build`；生成 `feed.rss` 与 `posts.json`；把本次推送的文章变更写进运行摘要；上传产物并部署到 GitHub Pages。
 
 `git push` 遇到**网络类**失败（`SSL_ERROR_SYSCALL`、`RPC failed`、`Connection reset` 之类）会自动用本机代理再试一次：依次看环境变量 `HTTPS_PROXY`、Windows 系统代理、`127.0.0.1:7890`（都先探测端口通不通），重试时顺手把 `http.version` 降到 HTTP/1.1 —— 大 pack 在 HTTP/2 下更容易 `RPC failed`；再失败就把能直接复制的命令打出来，退出码仍是 1。认证失败、非快进这类业务失败不重试，重试也不会变好。实现见 `scripts/lib/git-push.mjs`。
 
 每次运行会把「本次推送新增/更新/删除/发布/转为草稿的内容」写进 Actions 运行摘要，同时打在步骤日志里（表格含「分类」列，区分文章与日记）：
 
 ```bash
-gh run list --limit 5
-gh run view <run-id>                        # 摘要里就是文章变更表
+gh run list --limit 5                        # 最近几次部署
+gh run watch                                 # 盯着当前这次
+gh run view <run-id>                         # 摘要里就是文章变更表
 gh run view <run-id> --log | grep -A20 '文章追踪'
 ```
 
@@ -180,7 +213,11 @@ gh run view <run-id> --log | grep -A20 '文章追踪'
 - `/posts.json` — 已发布文章清单（标题、日期、标签、字数、正文 `hash`）
 - `/feed.rss` — RSS 2.0
 
-草稿（frontmatter `draft: true`）通过 `srcExclude` 排除，构建产物里没有它的 HTML。
+`posts.json` 里的 `hash` 只由正文算出来：只改标题、标签、日期时它不变，正文动了才变。CI 的文章变更表据此区分「🏷️ 元信息」与「✏️ 更新」，不用点进 diff 也知道这次动了什么：
+
+```bash
+curl -s <站点地址>/posts.json | jq '.count'   # 线上已发布篇数
+```
 
 ## 换仓库名 / 自定义域名
 
