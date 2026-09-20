@@ -133,5 +133,5 @@ const hints = []
 if (rows.some((row) => row.noDate)) hints.push('有内容缺少 date，列表顺序会不稳定，请补上 frontmatter 的 date。')
 if (dirtyCount) hints.push('有未提交的改动：pnpm ship')
 if (rows.some((row) => row.draft)) hints.push(`有草稿：把 frontmatter 的 draft 改成 false 即会发布。`)
-if (!hints.length) hints.push('一切干净：pnpm new "标题" 写文章，pnpm import:posts / pnpm import:diary 导入笔记，pnpm ship 发布。')
+if (!hints.length) hints.push('一切干净：pnpm new "标题" 写文章，pnpm upload / pnpm import:diary 导入笔记，pnpm ship 发布。')
 console.log(`\n${hints.map((hint) => `· ${hint}`).join('\n')}\n`)
