@@ -14,12 +14,8 @@ hero:
       link: /archive
 
 features:
-  - title: 一篇 Markdown 就是一篇博客
-    details: 文章放进 docs/posts，文件名带日期，frontmatter 里写标题、标签、摘要。
-  - title: push 即发布
-    details: 推到 main 分支后，GitHub Actions 自动构建并部署到 GitHub Pages。
-  - title: 变更可追踪
-    details: 每次部署都会生成文章变更清单，站点同时输出 posts.json 全量已发布清单。
+  - title: 死亡之梦
+    details: 一个人将死的梦语。
 ---
 
 ## 最新文章
