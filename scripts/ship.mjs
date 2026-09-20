@@ -93,11 +93,16 @@ const content = staged
     const relative = change.path.replace(/^docs\//, '')
     const prefix = CONTENT_DIRS.find((dir) => change.path.startsWith(dir))
     const collection = COLLECTION_BY_DIR.get(prefix) ?? 'post'
-    // 刚执行过 git add -A，工作区内容即暂存内容；删除的文件没有内容可读
-    if (change.code === 'D') return { ...change, collection, title: path.basename(relative, '.md') }
     const abs = path.join(process.cwd(), change.path)
-    const raw = existsSync(abs) ? readFileSync(abs, 'utf8') : git(['show', `:${change.path}`])
-    return { ...change, collection, title: parsePost(relative, raw).title }
+    // 刚 git add -A 过，工作区内容即暂存内容；删除的取 HEAD（此刻 HEAD 还是提交前的状态），
+    // 两边都拿不到就退回文件名
+    const raw =
+      change.code === 'D'
+        ? git(['show', `HEAD:${change.path}`], { optional: true })
+        : existsSync(abs)
+          ? readFileSync(abs, 'utf8')
+          : git(['show', `:${change.path}`])
+    return { ...change, collection, title: raw ? parsePost(relative, raw).title : path.basename(relative, '.md') }
   })
 
 /**
