@@ -64,10 +64,7 @@ function git(args, { optional = false } = {}) {
   process.exit(1)
 }
 
-if (git(['rev-parse', '--is-inside-work-tree'], { optional: true }).trim() !== 'true') {
-  console.error('当前目录不是 git 仓库。')
-  process.exit(1)
-}
+// 不在仓库里时下面第一条 git add 就会带着 git 自己的报错退出，不必先单跑一次 rev-parse
 
 git(['add', '-A'])
 const staged = git(['diff', '--cached', '--name-status', '-M'])
@@ -155,8 +152,10 @@ if (options.dryRun) {
   process.exit(0)
 }
 
-git(['commit', '-m', message])
-console.log(`\n已提交 ${git(['rev-parse', '--short', 'HEAD']).trim()}`)
+const committed = git(['commit', '-m', message])
+// git commit 会打印 `[main 2fa14bd] 提交信息`，直接取；取不到再问一次 rev-parse
+const hash = /\[[^\]]+ ([0-9a-f]{7,40})\]/.exec(committed)?.[1] ?? git(['rev-parse', '--short', 'HEAD']).trim()
+console.log(`\n已提交 ${hash}`)
 
 if (!options.push) {
   console.log('--no-push：未推送。')

@@ -16,6 +16,7 @@ pnpm new "文章标题" --tags 工具,博客   # 生成 docs/posts/YYYY-MM-DD-sl
 pnpm dev                              # 边写边看
 pnpm track                            # 内容状态：文章 / 日记 / 草稿 / 未提交
 pnpm ship                             # 提交并推送，自动生成 commit message
+pnpm upload "D:/Note/…/笔记.md"        # 导入一篇 Obsidian 笔记 → 提交 → 推送，一条命令
 ```
 
 文章是 `docs/posts/` 下的 Markdown，frontmatter 见 `docs/posts/2026-09-18-writing-workflow.md`。
@@ -68,6 +69,7 @@ pnpm ship                             # 提交并推送，自动生成 commit me
 | --- | --- | --- |
 | `pnpm import:diary` | 整库导入日记（`Diary/` 下全部 md） | `docs/diary/<日期-时间>.md` + `docs/public/images/diary/` |
 | `pnpm import:posts <笔记.md>...` | 把指定笔记搬进某个分类 | `docs/<分类>/<日期-slug>.md` + `docs/public/images/<分类>/<日期-slug>/` |
+| `pnpm upload <笔记.md>...` | 同上，导入完顺带提交并推送（= `import:posts --ship`） | 同上一行，另加一次 commit + push |
 
 ```bash
 pnpm import:diary
@@ -76,6 +78,22 @@ node scripts/import-posts.mjs "D:/Note/social death/2024暑假总结.md" --tags 
 node scripts/import-posts.mjs --collection video --tags Blender "D:/Note/social death/做片笔记/Blender小技巧.md"
 node scripts/import-posts.mjs --collection video --attachments "D:/Note/另一处附件" "D:/Note/x.md"   # 附件不在默认目录时
 ```
+
+### 上传一篇笔记
+
+导入 + 提交 + 推送本来是三步，`pnpm upload` 一条命令做完（先 `--dry-run` 看一眼要写成什么，再真发）：
+
+```bash
+pnpm upload "D:/Note/social death/随笔/为什么我讨厌看AI漫剧.md" --dry-run   # ~1s，只打印计划，不写盘不提交
+pnpm upload "D:/Note/social death/随笔/为什么我讨厌看AI漫剧.md"             # 导入 → 提交 → 推送
+pnpm upload "D:/Note/social death/2024暑假总结.md" --tags 总结,学习          # 参数与 import:posts 完全一致
+pnpm upload --collection video --tags Blender "D:/Note/social death/做片笔记/Blender小技巧.md"
+pnpm import:diary --ship                                                    # 整库日记也可以导入完直接发
+```
+
+`--ship` 只是把 `scripts/ship.mjs` 当子进程再跑一遍（`scripts/lib/ship-run.mjs`）：commit message、暂存范围、push 失败后的代理重试都还是 `ship` 那一套，不重复实现；ship 失败会以它的退出码结束，不会用「导入完成」掩盖「没发出去」。
+
+这条流程**不跑本地全量构建**——构建是 CI 的事，导入报告（缺失图片、动图张数、未收录附件）才是导入本身会踩的坑，而且只要约 1 秒，比 20 秒的全量构建更快也更对症。改动图片管线、附件查找这类东西时再 `pnpm build` 本地确认。
 
 转换规则：
 
@@ -136,6 +154,7 @@ scripts/
   shrink-images.mjs           重压过大的动图
   lib/import-note.mjs         导入共用：命名、附件查找、图片转码、语法转换
   lib/git-push.mjs            push 网络失败后走代理重试一次
+  lib/ship-run.mjs            导入脚本 --ship 的收尾：跑一遍 ship.mjs
   track.mjs                   内容状态总览（按分类）
   ship.mjs                    提交并推送
   changelog.mjs               CI 用的内容变更追踪

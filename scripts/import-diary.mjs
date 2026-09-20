@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { DOCS_DIR } from '../docs/.vitepress/lib/posts.mjs'
 import { createImageStore, createStats, transformBody, walk } from './lib/import-note.mjs'
+import { shipImport } from './lib/ship-run.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -26,6 +27,7 @@ const options = {
   quality: 82,
   force: false,
   dryRun: false,
+  ship: false,
 }
 for (let index = 0; index < argv.length; index++) {
   const value = () => argv[++index] ?? ''
@@ -51,10 +53,15 @@ for (let index = 0; index < argv.length; index++) {
     case '--dry-run':
       options.dryRun = true
       break
+    case '--ship':
+      options.ship = true
+      break
     case '-h':
     case '--help':
       console.log(`用法：node scripts/import-diary.mjs [--source <Obsidian 库目录>] [--out docs/diary] [--image-out docs/public/images/diary]
-       [--max-width 1920] [--quality 82] [--force] [--dry-run]`)
+       [--max-width 1920] [--quality 82] [--force] [--dry-run] [--ship]
+
+  --ship         导入后接着跑一遍 scripts/ship.mjs：提交并推送`)
       process.exit(0)
       break
     default:
@@ -187,3 +194,8 @@ async function main() {
 }
 
 await main()
+
+if (options.ship) {
+  if (options.dryRun) console.log('--ship：dry-run，未提交未推送。')
+  else shipImport()
+}

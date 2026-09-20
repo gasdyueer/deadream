@@ -12,6 +12,7 @@
     "new": "node scripts/new-post.mjs",
     "import:diary": "node scripts/import-diary.mjs",
     "import:posts": "node scripts/import-posts.mjs",
+    "upload": "node scripts/import-posts.mjs --ship",
     "shrink:images": "node scripts/shrink-images.mjs",
     "track": "node scripts/track.mjs",
     "ship": "node scripts/ship.mjs",

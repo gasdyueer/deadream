@@ -13,6 +13,7 @@ import path from 'node:path'
 import matter from 'gray-matter'
 import { COLLECTIONS, DOCS_DIR } from '../docs/.vitepress/lib/posts.mjs'
 import { createImageStore, createStats, slugify, transformBody } from './lib/import-note.mjs'
+import { shipImport } from './lib/ship-run.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -30,6 +31,7 @@ const options = {
   quality: 82,
   force: false,
   dryRun: false,
+  ship: false,
 }
 const files = []
 for (let index = 0; index < argv.length; index++) {
@@ -62,14 +64,18 @@ for (let index = 0; index < argv.length; index++) {
     case '--dry-run':
       options.dryRun = true
       break
+    case '--ship':
+      options.ship = true
+      break
     case '-h':
     case '--help':
-      console.log(`用法：node scripts/import-posts.mjs <笔记.md>... [--collection post|diary|video] [--attachments <附件目录>] [--tags a,b] [--date YYYY-MM-DD] [--slug x] [--dry-run]
+      console.log(`用法：node scripts/import-posts.mjs <笔记.md>... [--collection post|diary|video] [--attachments <附件目录>] [--tags a,b] [--date YYYY-MM-DD] [--slug x] [--dry-run] [--ship]
 
   --collection   导入到哪个分类（默认 post），目录与图片目录由 COLLECTIONS 决定
   --attachments  额外附件目录，可重复；默认还会找笔记同级与上级的 images/ 以及笔记同级目录
   --date         覆盖日期，默认取 frontmatter.date 或文件修改时间
-  --slug         覆盖文件名片段，单文件时才有意义`)
+  --slug         覆盖文件名片段，单文件时才有意义
+  --ship         导入后接着跑一遍 scripts/ship.mjs：提交并推送（pnpm upload 就是这个）`)
       process.exit(0)
       break
     default:
@@ -199,3 +205,8 @@ async function main() {
 }
 
 await main()
+
+if (options.ship) {
+  if (options.dryRun) console.log('--ship：dry-run，未提交未推送。')
+  else shipImport()
+}

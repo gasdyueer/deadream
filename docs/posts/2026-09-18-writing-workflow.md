@@ -52,6 +52,7 @@ pnpm dev            # 本地预览 http://localhost:5173
 pnpm new "文章标题"  # 新建文章，自动生成日期文件名和 frontmatter
 pnpm track          # 看所有文章的状态：已发布 / 草稿 / 未提交
 pnpm ship           # 提交并推送，自动生成 commit message
+pnpm upload "笔记.md"  # 导入 Obsidian 笔记并直接发布：导入 → 提交 → 推送
 ```
 
 `pnpm new` 的常用参数：
@@ -117,6 +118,16 @@ node scripts/import-posts.mjs --collection video --tags Blender "D:/Note/social 
 ```
 
 它会转换 Obsidian 语法、把被引用的图片处理成站点图片（静图转 JPEG，动图转成保留动画的 WebP），写出 `docs/<分类>/<日期-slug>.md`。改完原笔记再跑一次是覆盖，于是在追踪表里就显示成一次「✏️ 更新」。
+
+导入完还要 `pnpm ship` 一次才发得出去，所以日常用一条命令的封装：
+
+```bash
+pnpm upload "D:/Note/social death/随笔/为什么我讨厌看AI漫剧.md"          # 导入 → 提交 → 推送
+pnpm upload "D:/Note/social death/2024暑假总结.md" --tags 总结,学习       # 参数与 import:posts 一致
+pnpm upload "D:/Note/social death/随笔/为什么我讨厌看AI漫剧.md" --dry-run  # 先看要写成什么：不写盘、不提交
+```
+
+`pnpm upload` 就是 `import:posts --ship`。`--ship` 在导入报告之后把 `scripts/ship.mjs` 当子进程跑一遍，commit message 的生成与 push 失败后的代理重试都还是那一套；ship 失败会带着它的退出码结束，不会拿「导入完成」盖住「没发出去」。`--dry-run` 连提交一起跳过——导入都没落盘，没什么可提交的。
 
 分类本身声明在 `docs/.vitepress/lib/posts.mjs` 的 `COLLECTIONS` 里，目录名即 URL 前缀。
 
