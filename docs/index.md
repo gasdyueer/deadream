@@ -3,14 +3,14 @@ layout: home
 
 hero:
   name: deadream
-  text: 写点什么
-  tagline: 一个用来存放想法、代码与笔记的地方。
+  text: 梦
+  tagline: 睡眠，睡眠，睡眠，然后死于梦中。
   actions:
     - theme: brand
-      text: 开始阅读
+      text: 开始做梦
       link: /posts/
     - theme: alt
-      text: 归档
+      text: 遗
       link: /archive
 
 features:
