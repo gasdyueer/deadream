@@ -2,13 +2,17 @@
 import { execFileSync } from 'node:child_process'
 import { COLLECTIONS, loadPosts } from '../docs/.vitepress/lib/posts.mjs'
 
-/** 执行 git 命令，失败时返回空串而不是抛错。core.quotepath=false 保证中文路径不被转义。 */
+/**
+ * 执行 git 命令，失败时返回空串而不是抛错。core.quotepath=false 保证中文路径不被转义。
+ * 只去尾部空白：`git status --porcelain` 的首行以空格开头（` M 路径`），
+ * 整段 trim 会把那个空格吃掉，让下面按固定列切片的首行整体错位一位。
+ */
 function git(args) {
   try {
     return execFileSync('git', ['-c', 'core.quotepath=false', ...args], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim()
+    }).trimEnd()
   } catch {
     return ''
   }
@@ -80,6 +84,7 @@ const rows = posts.map((post) => {
     dirty: dirty.has(file),
     draft: post.draft,
     noDate: !post.date,
+    noTags: !post.tags.length,
   }
 })
 
@@ -131,6 +136,7 @@ console.log(`${totals}${dirtyCount ? ` · 未提交改动 ${dirtyCount}（*）` 
 
 const hints = []
 if (rows.some((row) => row.noDate)) hints.push('有内容缺少 date，列表顺序会不稳定，请补上 frontmatter 的 date。')
+if (rows.some((row) => row.noTags)) hints.push('有内容缺少 tags：列表页与标签页靠标签聚合，补上 frontmatter 的 tags（pnpm ship 会拦）。')
 if (dirtyCount) hints.push('有未提交的改动：pnpm ship')
 if (rows.some((row) => row.draft)) hints.push(`有草稿：把 frontmatter 的 draft 改成 false 即会发布。`)
 if (!hints.length) hints.push('一切干净：pnpm new "标题" 写文章，pnpm upload / pnpm import:diary 导入笔记，pnpm ship 发布。')

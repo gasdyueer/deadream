@@ -1,7 +1,7 @@
 ---
 title: "关于AI临摹Motion Graphic"
 date: 2026-09-16
-tags: []
+tags: [随笔, AI, MAD]
 ---
 
 # 关于AI临摹Motion Graphic

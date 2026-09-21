@@ -12,7 +12,7 @@ pnpm dev            # http://localhost:5173
 ## 写作
 
 ```bash
-pnpm new "文章标题" --tags 工具,博客   # 生成 docs/posts/YYYY-MM-DD-slug.md
+pnpm new "文章标题" --tags 游戏,Godot  # 生成 docs/posts/YYYY-MM-DD-slug.md
 pnpm dev                              # 边写边看
 pnpm track                            # 内容状态：文章 / 日记 / 草稿 / 未提交
 pnpm ship                             # 提交并推送，自动生成 commit message
@@ -25,7 +25,7 @@ pnpm upload "D:/Note/…/笔记.md"        # 导入一篇 Obsidian 笔记 → �
 ---
 title: 标题
 date: 2026-09-18
-tags: [工具, 博客]
+tags: [游戏, Godot]
 description: 一句话摘要，会显示在列表页和 RSS 里。
 draft: false
 ---
@@ -39,7 +39,7 @@ draft: false
 | --- | --- | --- |
 | `title` | 是 | 列表、RSS、`<title>` 都用它 |
 | `date` | 是 | `YYYY-MM-DD`，列表和归档按它排序 |
-| `tags` | 否 | 数组或逗号分隔字符串 |
+| `tags` | 是 | 数组或逗号分隔字符串；列表页、标签页、订阅源都按它聚合，规矩见「标签」 |
 | `description` | 否 | 不写就自动截取正文前 160 字 |
 | `updated` | 否 | 填了就在归档页的「最近更新」里按它排序 |
 | `draft` | 否 | `true` 时**不构建、不进列表、不出现在 RSS**——`srcExclude` 直接跳过，产物里没有它的 HTML |
@@ -47,11 +47,37 @@ draft: false
 `pnpm new` 的常用参数与流程：
 
 ```bash
-pnpm new "给 VitePress 加 RSS" --tags 工具,博客
+pnpm new "给 VitePress 加 RSS" --tags 流程
 pnpm new "还没写完的东西" --draft   # 存成草稿，不会被发布
 ```
 
 写完 `pnpm dev` 看一眼，再 `pnpm ship` 提交并推送。
+
+## 标签
+
+**文章必须有标签**。列表页、标签页（`docs/tags.md`，只收「文章」分类）与订阅源都按标签聚合，没标签的文章在站点里等于检索不到自己，所以三个入口都会拦：
+
+| 入口 | 缺标签时 | 唯一放行口 |
+| --- | --- | --- |
+| `pnpm new` | 退出，不建文件 | `--draft`（先存草稿） |
+| `pnpm import:posts` / `pnpm upload` | 退出，一个字都不写 | `--no-tags` |
+| `pnpm ship` | 退出，不提交 | `--allow-untagged` |
+
+判定与报错文案在 `scripts/lib/tags.mjs`（唯一实现）；报错时会把**现有标签**全列出来，照着挑就行 —— `pnpm track` 的标签列也是同一份现状。
+
+写标签的规矩（人和 AI 同一套）：
+
+- **优先复用现有标签**，别每篇造新词 —— 词一多，标签页就废了。
+- **2–4 个**，宽泛题材 + 具体对象成对：`游戏` + `CS2`、`拉片` + `MAD`，跟已有的 `游戏开发` + `Godot` 一个路数。
+- 新标签要能被多篇复用；一次性的人名、项目名、临时状态不进标签。
+
+从 Obsidian 导入时**先读完正文再定标签**（源笔记 frontmatter 里已有 tags 就自动沿用）：
+
+```bash
+pnpm upload "D:/Note/social death/随笔/某某.md" --tags 随笔,大学
+```
+
+导入+发布是一条命令，但**标签是人（或 AI）读正文后的判断，不是脚本能猜的** —— 所以留空就是报错，而不是静默发一篇没标签的文章。
 
 ## 分类
 
@@ -123,6 +149,8 @@ pnpm upload --collection video --tags Blender "D:/Note/social death/做片笔记
 pnpm import:diary --ship                                                    # 整库日记也可以导入完直接发
 ```
 
+导入前先**读完正文定标签**（`--tags`，规矩见「标签」）：不传、源笔记 frontmatter 也没有 tags 时导入直接退出，一个字都不写 —— 标签是读正文后的判断，脚本猜不出来，留空就是报错。
+
 `--ship` 只是把 `scripts/ship.mjs` 当子进程再跑一遍（`scripts/lib/ship-run.mjs`）：commit message、暂存范围、push 失败后的代理重试都还是 `ship` 那一套，不重复实现；ship 失败会以它的退出码结束，不会用「导入完成」掩盖「没发出去」。
 
 这条流程**不跑本地全量构建**——构建是 CI 的事，导入报告（缺失图片、动图张数、未收录附件）才是导入本身会踩的坑，而且只要约 1 秒；全量构建本机 14~20 秒，本地跑它只是把 CI 已经要做的事再做一遍。整条 `pnpm upload`（导入 + 提交 + 推送）实测 11.9 秒，其中 push 的网络往返占大头。改到图片管线、附件查找这类地方时再 `pnpm build` 本地确认。
@@ -185,6 +213,7 @@ scripts/
   import-posts.mjs            把指定笔记搬进某个分类
   shrink-images.mjs           重压过大的动图
   lib/import-note.mjs         导入共用：命名、附件查找、图片转码、语法转换
+  lib/tags.mjs                标签硬要求：判定与报错文案（new / import-posts / ship 共用）
   lib/git-push.mjs            push 网络失败后走代理重试一次
   lib/ship-run.mjs            导入脚本 --ship 的收尾：跑一遍 ship.mjs
   track.mjs                   内容状态总览（按分类）

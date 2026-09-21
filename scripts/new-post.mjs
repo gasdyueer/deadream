@@ -2,6 +2,7 @@
 import { existsSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { POSTS_DIR } from '../docs/.vitepress/lib/posts.mjs'
+import { tagHints } from './lib/tags.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -52,6 +53,14 @@ const title = titleWords.join(' ').trim()
 if (!title) {
   console.error('错误：缺少文章标题。')
   usage(1)
+}
+
+// 标签是硬要求（README「标签」）：建文件时就定下来，免得写完才发现列表页上没这一篇
+if (!options.tags.length && !options.draft) {
+  console.error(
+    ['错误：文章必须有标签。', tagHints(['post']), '用 --tags 传进来（例：--tags 随笔,游戏）；还没想好就先 --draft。'].join('\n')
+  )
+  process.exit(1)
 }
 
 const now = new Date()

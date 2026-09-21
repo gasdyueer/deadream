@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { COLLECTIONS, parsePost } from '../docs/.vitepress/lib/posts.mjs'
 import { pushHint, pushWithRetry } from './lib/git-push.mjs'
+import { formatUntagged, untagged } from './lib/tags.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -11,7 +12,7 @@ const argv = process.argv.slice(2).flatMap((arg) =>
     : [arg]
 )
 
-const options = { message: '', push: true, dryRun: false }
+const options = { message: '', push: true, dryRun: false, allowUntagged: false }
 for (let index = 0; index < argv.length; index++) {
   const value = () => argv[++index] ?? ''
   switch (argv[index]) {
@@ -25,11 +26,15 @@ for (let index = 0; index < argv.length; index++) {
     case '--dry-run':
       options.dryRun = true
       break
+    case '--allow-untagged':
+      options.allowUntagged = true
+      break
     case '-h':
     case '--help':
-      console.log(`用法：pnpm ship [-m "提交信息"] [--no-push] [--dry-run]
+      console.log(`用法：pnpm ship [-m "提交信息"] [--no-push] [--dry-run] [--allow-untagged]
 
-自动 git add -A，根据本次改动的文章生成 commit message，提交并推送。`)
+自动 git add -A，根据本次改动的文章生成 commit message，提交并推送。
+本次改动的文章缺 frontmatter tags 时直接退出，不给提交；--allow-untagged 是唯一的放行口。`)
       process.exit(0)
       break
     default:
@@ -102,8 +107,25 @@ const content = staged
         : existsSync(abs)
           ? readFileSync(abs, 'utf8')
           : git(['show', `:${change.path}`])
-    return { ...change, collection, title: raw ? parsePost(relative, raw).title : path.basename(relative, '.md') }
+    const parsed = raw ? parsePost(relative, raw) : null
+    return {
+      ...change,
+      collection,
+      title: parsed?.title ?? path.basename(relative, '.md'),
+      tags: parsed?.tags ?? [],
+    }
   })
+
+// 标签是硬要求（README「标签」）：标签页与列表页都靠它聚合，缺标签的内容等于没进站点
+const missingTags = untagged(content)
+if (missingTags.length && !options.allowUntagged) {
+  console.error(
+    formatUntagged(missingTags, {
+      fix: '补上 frontmatter 的 tags 后重跑 pnpm ship；确实不要标签就加 --allow-untagged。',
+    })
+  )
+  process.exit(1)
+}
 
 /**
  * 标题列表 → 文案片段。数量多时退化成计数，此时前面留一个空格，

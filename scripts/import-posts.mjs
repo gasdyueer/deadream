@@ -14,6 +14,7 @@ import matter from 'gray-matter'
 import { COLLECTIONS, DOCS_DIR } from '../docs/.vitepress/lib/posts.mjs'
 import { createImageStore, createStats, slugify, transformBody } from './lib/import-note.mjs'
 import { shipImport } from './lib/ship-run.mjs'
+import { formatUntagged, untagged } from './lib/tags.mjs'
 
 const argv = process.argv.slice(2).flatMap((arg) =>
   arg.startsWith('--') && arg.includes('=')
@@ -32,6 +33,7 @@ const options = {
   force: false,
   dryRun: false,
   ship: false,
+  noTags: false,
 }
 const files = []
 for (let index = 0; index < argv.length; index++) {
@@ -64,15 +66,20 @@ for (let index = 0; index < argv.length; index++) {
     case '--dry-run':
       options.dryRun = true
       break
+    case '--no-tags':
+      options.noTags = true
+      break
     case '--ship':
       options.ship = true
       break
     case '-h':
     case '--help':
-      console.log(`用法：node scripts/import-posts.mjs <笔记.md>... [--collection post|diary|video] [--attachments <附件目录>] [--tags a,b] [--date YYYY-MM-DD] [--slug x] [--dry-run] [--ship]
+      console.log(`用法：node scripts/import-posts.mjs <笔记.md>... [--collection post|diary|video] [--attachments <附件目录>] [--tags a,b] [--no-tags] [--date YYYY-MM-DD] [--slug x] [--dry-run] [--ship]
 
   --collection   导入到哪个分类（默认 post），目录与图片目录由 COLLECTIONS 决定
   --attachments  额外附件目录，可重复；默认还会找笔记同级与上级的 images/ 以及笔记同级目录
+  --tags         标签，必填（源笔记 frontmatter 里有就自动用）；名单与粒度见 README「标签」
+  --no-tags      明确放弃标签，只在这一篇确实无标签可给时用
   --date         覆盖日期，默认取 frontmatter.date 或文件修改时间
   --slug         覆盖文件名片段，单文件时才有意义
   --ship         导入后接着跑一遍 scripts/ship.mjs：提交并推送（pnpm upload 就是这个）`)
@@ -108,24 +115,45 @@ function fileDate(file) {
 
 const stats = createStats()
 
+/** 读一份源笔记，定下标题 / 日期 / 标签 / 文件名片段（先在写盘前全量拿到，缺标签时才能整体退出） */
+function prepare(file) {
+  if (!existsSync(file)) {
+    console.error(`找不到文件：${file}`)
+    process.exit(1)
+  }
+
+  const parsed = matter(readFileSync(file, 'utf8'))
+  const title = String(parsed.data.title ?? parsed.data['zhihu-title'] ?? path.basename(file, '.md')).trim()
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : String(parsed.data.date ?? '').slice(0, 10) || fileDate(file)
+  const tags = options.tags.length
+    ? options.tags
+    : Array.isArray(parsed.data.tags)
+      ? parsed.data.tags.map(String).filter(Boolean)
+      : []
+  const slug = options.slug || slugify(title) || `note-${Date.now()}`
+
+  return { file, parsed, title, date, tags, slug }
+}
+
 async function main() {
+  const plans = files.map(prepare)
+
+  // 标签是硬要求（README「标签」）：没有标签的内容在列表页、标签页和订阅源里都等于不存在
+  const missing = untagged(plans.map((plan) => ({ path: plan.file, title: plan.title, tags: plan.tags })))
+  if (missing.length && !options.noTags) {
+    console.error(
+      formatUntagged(missing, {
+        collections: [collection.name],
+        fix: '读一遍正文再定标签，用 --tags 传进来；这一篇确实无标签可给就加 --no-tags。',
+      })
+    )
+    process.exit(1)
+  }
+
   const summaries = []
 
-  for (const file of files) {
-    if (!existsSync(file)) {
-      console.error(`找不到文件：${file}`)
-      process.exit(1)
-    }
-
-    const parsed = matter(readFileSync(file, 'utf8'))
-    const title = String(parsed.data.title ?? parsed.data['zhihu-title'] ?? path.basename(file, '.md')).trim()
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : String(parsed.data.date ?? '').slice(0, 10) || fileDate(file)
-    const tags = options.tags.length
-      ? options.tags
-      : Array.isArray(parsed.data.tags)
-        ? parsed.data.tags.map(String)
-        : []
-    const slug = options.slug || slugify(title) || `note-${Date.now()}`
+  for (const plan of plans) {
+    const { file, parsed, title, date, tags, slug } = plan
 
     let stem = `${date}-${slug}`
     const target = () => path.join(OUT_DIR, `${stem}.md`)
